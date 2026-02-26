@@ -131,8 +131,12 @@ export default function Dashboard() {
   
   // Email subscription states
   const [subscribers, setSubscribers] = useState<string[]>([ADMIN_EMAIL])
-  const [newEmail, setNewEmail] = useState('')
-  const [emailError, setEmailError] = useState<string | null>(null)
+  const [newSubscriber, setNewSubscriber] = useState('')
+  const [subscriberError, setSubscriberError] = useState<string | null>(null)
+  
+  // Individual email send state
+  const [individualEmail, setIndividualEmail] = useState('')
+  const [individualEmailError, setIndividualEmailError] = useState<string | null>(null)
 
   // Load subscribers from localStorage
   const loadSubscribers = useCallback(() => {
@@ -169,28 +173,28 @@ export default function Dashboard() {
 
   // Add new subscriber
   const handleAddSubscriber = () => {
-    setEmailError(null)
+    setSubscriberError(null)
     
-    if (!newEmail.trim()) {
-      setEmailError('Por favor insira um email')
+    if (!newSubscriber.trim()) {
+      setSubscriberError('Por favor insira um email')
       return
     }
     
-    if (!isValidEmail(newEmail)) {
-      setEmailError('Por favor insira um email válido')
+    if (!isValidEmail(newSubscriber)) {
+      setSubscriberError('Por favor insira um email válido')
       return
     }
     
-    if (subscribers.includes(newEmail.toLowerCase())) {
-      setEmailError('Este email já está subscrito')
+    if (subscribers.includes(newSubscriber.toLowerCase())) {
+      setSubscriberError('Este email já está subscrito')
       return
     }
     
-    const updatedSubscribers = [...subscribers, newEmail.toLowerCase()]
+    const updatedSubscribers = [...subscribers, newSubscriber.toLowerCase()]
     setSubscribers(updatedSubscribers)
     saveSubscribers(updatedSubscribers)
-    setNewEmail('')
-    setNotification({ type: 'success', message: `Email ${newEmail} adicionado com sucesso!` })
+    setNewSubscriber('')
+    setNotification({ type: 'success', message: `Email ${newSubscriber} adicionado aos subscritores!` })
   }
 
   // Remove subscriber (except admin)
@@ -306,13 +310,26 @@ export default function Dashboard() {
     }
   }
 
-  // Send email report
+  // Send email to individual recipient (NOT to all subscribers)
   const handleSendEmail = async () => {
+    setIndividualEmailError(null)
+    
+    // Validate individual email
+    if (!individualEmail.trim()) {
+      setIndividualEmailError('Por favor insira um email para enviar o relatório')
+      return
+    }
+    
+    if (!isValidEmail(individualEmail)) {
+      setIndividualEmailError('Por favor insira um email válido')
+      return
+    }
+    
     setIsSendingEmail(true)
     setNotification(null)
     setMailtoLink(null)
     try {
-      // Send articles and all subscribers in the request body
+      // Send ONLY to the individual email provided
       const response = await fetch('/api/send-email', { 
         method: 'POST',
         headers: {
@@ -320,7 +337,8 @@ export default function Dashboard() {
         },
         body: JSON.stringify({ 
           articles,
-          recipients: subscribers // Send to all subscribers
+          recipient: individualEmail.toLowerCase(), // Single recipient
+          mode: 'individual' // Mark as individual send
         })
       })
       const data: EmailResult = await response.json()
@@ -516,47 +534,93 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex flex-wrap gap-4 mb-8">
-          <Button 
-            onClick={handleSearch} 
-            disabled={isSearching || isLoading}
-            className="bg-violet-700 hover:bg-violet-800 text-white gap-2"
-            size="lg"
-          >
-            {isSearching ? (
-              <>
-                <RefreshCw className="w-5 h-5 animate-spin" />
-                Pesquisando...
-              </>
-            ) : (
-              <>
-                <Search className="w-5 h-5" />
-                Executar Pesquisa Agora
-              </>
-            )}
-          </Button>
-          
-          <Button 
-            onClick={handleSendEmail} 
-            disabled={isSendingEmail || isLoading || articles.length === 0}
-            variant="outline"
-            className="gap-2 border-violet-200 hover:bg-violet-50 hover:text-violet-700"
-            size="lg"
-          >
-            {isSendingEmail ? (
-              <>
-                <RefreshCw className="w-5 h-5 animate-spin" />
-                Preparando...
-              </>
-            ) : (
-              <>
-                <Send className="w-5 h-5" />
-                Enviar Relatório por Email
-              </>
-            )}
-          </Button>
-        </div>
+        {/* Action Section - Search and Individual Email */}
+        <Card className="mb-8 border-violet-200 bg-gradient-to-r from-violet-50 to-white">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Send className="w-5 h-5 text-violet-500" />
+              Pesquisa e Envio Individual
+            </CardTitle>
+            <CardDescription>
+              Execute uma pesquisa e envie o relatório para o seu email
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col lg:flex-row gap-4">
+              {/* Search Button */}
+              <Button 
+                onClick={handleSearch} 
+                disabled={isSearching || isLoading}
+                className="bg-violet-700 hover:bg-violet-800 text-white gap-2"
+                size="lg"
+              >
+                {isSearching ? (
+                  <>
+                    <RefreshCw className="w-5 h-5 animate-spin" />
+                    Pesquisando...
+                  </>
+                ) : (
+                  <>
+                    <Search className="w-5 h-5" />
+                    Executar Pesquisa
+                  </>
+                )}
+              </Button>
+              
+              {/* Divider */}
+              <div className="hidden lg:flex items-center">
+                <div className="w-px h-10 bg-violet-200"></div>
+              </div>
+              
+              {/* Individual Email Send */}
+              <div className="flex-1 flex flex-col sm:flex-row gap-2">
+                <div className="flex-1">
+                  <Input
+                    type="email"
+                    placeholder="Insira o seu email para receber o relatório..."
+                    value={individualEmail}
+                    onChange={(e) => {
+                      setIndividualEmail(e.target.value)
+                      setIndividualEmailError(null)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !isSendingEmail && articles.length > 0) {
+                        handleSendEmail()
+                      }
+                    }}
+                    className="w-full"
+                  />
+                  {individualEmailError && (
+                    <p className="text-xs text-red-600 mt-1">{individualEmailError}</p>
+                  )}
+                </div>
+                <Button 
+                  onClick={handleSendEmail} 
+                  disabled={isSendingEmail || isLoading || articles.length === 0}
+                  variant="default"
+                  className="bg-green-600 hover:bg-green-700 text-white gap-2"
+                  size="lg"
+                >
+                  {isSendingEmail ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-5 h-5" />
+                      Enviar para este Email
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+            
+            <p className="text-xs text-slate-500 mt-3">
+              💡 O email será enviado APENAS para o endereço indicado acima, não para a lista de subscritores.
+            </p>
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Articles Section */}
@@ -704,31 +768,31 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
-            {/* Email Subscribers Card */}
-            <Card>
+            {/* Email Subscribers Card - For Automatic Weekly Reports */}
+            <Card className="border-blue-200 bg-blue-50/30">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Users className="w-5 h-5 text-violet-500" />
-                  Subscritores de Email
+                  <Users className="w-5 h-5 text-blue-500" />
+                  👥 Subscritores (Envio Automático)
                 </CardTitle>
                 <CardDescription>
-                  Pessoas que recebem os relatórios semanais
+                  Recebem relatórios automaticamente todas as segundas-feiras
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Add new email */}
+                {/* Add new subscriber */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">
-                    Adicionar novo email:
+                    Adicionar subscritor:
                   </label>
                   <div className="flex gap-2">
                     <Input
                       type="email"
                       placeholder="email@exemplo.com"
-                      value={newEmail}
+                      value={newSubscriber}
                       onChange={(e) => {
-                        setNewEmail(e.target.value)
-                        setEmailError(null)
+                        setNewSubscriber(e.target.value)
+                        setSubscriberError(null)
                       }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
@@ -740,13 +804,13 @@ export default function Dashboard() {
                     <Button 
                       onClick={handleAddSubscriber}
                       size="icon"
-                      className="bg-violet-700 hover:bg-violet-800"
+                      className="bg-blue-600 hover:bg-blue-700"
                     >
                       <Plus className="w-4 h-4" />
                     </Button>
                   </div>
-                  {emailError && (
-                    <p className="text-xs text-red-600">{emailError}</p>
+                  {subscriberError && (
+                    <p className="text-xs text-red-600">{subscriberError}</p>
                   )}
                 </div>
 
@@ -754,28 +818,28 @@ export default function Dashboard() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm text-slate-600">
                     <span className="font-medium">Lista de subscritores:</span>
-                    <Badge variant="secondary" className="bg-violet-100 text-violet-700">
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-700">
                       {subscribers.length} {subscribers.length === 1 ? 'pessoa' : 'pessoas'}
                     </Badge>
                   </div>
-                  <ScrollArea className="h-[150px] rounded-lg border bg-slate-50 p-2">
+                  <ScrollArea className="h-[120px] rounded-lg border bg-white p-2">
                     <div className="space-y-1">
                       {subscribers.map((email) => (
                         <div 
                           key={email}
                           className={`flex items-center justify-between p-2 rounded-lg ${
                             email === ADMIN_EMAIL 
-                              ? 'bg-violet-100 border border-violet-200' 
-                              : 'bg-white hover:bg-slate-100'
+                              ? 'bg-blue-50 border border-blue-200' 
+                              : 'bg-slate-50 hover:bg-slate-100'
                           } transition-colors`}
                         >
                           <div className="flex items-center gap-2 min-w-0">
-                            <Mail className="w-4 h-4 text-violet-500 flex-shrink-0" />
+                            <Mail className="w-4 h-4 text-blue-500 flex-shrink-0" />
                             <span className="text-sm truncate font-medium text-slate-900">
                               {email}
                             </span>
                             {email === ADMIN_EMAIL && (
-                              <Badge variant="outline" className="text-xs border-violet-300 text-violet-600">
+                              <Badge variant="outline" className="text-xs border-blue-300 text-blue-600">
                                 Admin
                               </Badge>
                             )}

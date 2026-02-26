@@ -20,10 +20,29 @@ interface Article {
 
 export async function POST(request: Request) {
   try {
-    // Get articles and recipients from request body
+    // Get articles and recipient info from request body
     const body = await request.json();
     const articles: Article[] = body.articles || [];
-    const recipients: string[] = body.recipients || [ADMIN_EMAIL];
+    const mode = body.mode || 'individual'; // 'individual' or 'bulk'
+    
+    // For individual mode: single recipient
+    // For bulk mode (cronjob): multiple recipients from subscribers list
+    let recipients: string[];
+    
+    if (mode === 'individual' && body.recipient) {
+      // Individual send - only to the specified email
+      recipients = [body.recipient];
+    } else if (body.recipients && Array.isArray(body.recipients)) {
+      // Bulk send - to all subscribers (used by cronjob)
+      recipients = body.recipients;
+      // Ensure admin is always included in bulk mode
+      if (!recipients.includes(ADMIN_EMAIL)) {
+        recipients.unshift(ADMIN_EMAIL);
+      }
+    } else {
+      // Fallback to admin only
+      recipients = [ADMIN_EMAIL];
+    }
     
     if (articles.length === 0) {
       return NextResponse.json({
@@ -32,13 +51,8 @@ export async function POST(request: Request) {
       });
     }
     
-    // Ensure admin is always included
-    if (!recipients.includes(ADMIN_EMAIL)) {
-      recipients.unshift(ADMIN_EMAIL);
-    }
-    
     // Generate email content
-    const { html, text } = generateEmailContent(articles);
+    const { html, text } = generateEmailContent(articles, mode);
     
     // If no API key configured, return setup instructions
     if (!BREVO_API_KEY) {
@@ -115,7 +129,7 @@ O plano gratuito permite 300 emails/dia.
           subject: 'Relatório - Monitor de Medicina Sem Sangue',
           articlesCount: articles.length,
           results,
-          message: `✅ Email enviado com sucesso para ${successCount} de ${recipients.length} destinatário(s)! (${articles.length} artigos)`
+          message: `✅ Email enviado com sucesso para ${successCount} destinatário(s)! (${articles.length} artigos)`
         },
         htmlPreview: html
       });
@@ -143,7 +157,7 @@ function generateMailtoLink(articles: Article[], text: string, recipients: strin
   return `mailto:${to}?subject=${subject}&body=${body}`;
 }
 
-function generateEmailContent(articles: Article[]): { html: string; text: string } {
+function generateEmailContent(articles: Article[], mode: string = 'individual'): { html: string; text: string } {
   const now = new Date();
   
   const formatDate = (date: Date) => {
@@ -156,6 +170,11 @@ function generateEmailContent(articles: Article[]): { html: string; text: string
 
   const sourcesCount = new Set(articles.map(a => a.source)).size;
   const portugueseCount = articles.filter(a => a.isPortuguese).length;
+
+  // Different header text based on mode
+  const headerSubtitle = mode === 'individual' 
+    ? 'Relatório de Pesquisa Individual'
+    : 'Relatório de Pesquisa Semanal';
 
   const html = `
 <!DOCTYPE html>
@@ -186,7 +205,7 @@ function generateEmailContent(articles: Article[]): { html: string; text: string
 <body>
   <div class="header">
     <h1>🏥 Monitor de Medicina Sem Sangue</h1>
-    <p>Relatório de Pesquisa Semanal</p>
+    <p>${headerSubtitle}</p>
   </div>
   
   <div class="date-range">
@@ -221,13 +240,13 @@ function generateEmailContent(articles: Article[]): { html: string; text: string
   `).join('')}
   
   <div class="subscribe-info">
-    <strong>📩 Subscrever:</strong> Visite <a href="https://monitor-medicina-v2.vercel.app" style="color: #5b3c88;">monitor-medicina-v2.vercel.app</a> para adicionar o seu email à lista de subscritores.
+    <strong>📩 Subscrever relatórios automáticos:</strong> Visite <a href="https://monitor-medicina-v2.vercel.app" style="color: #5b3c88;">monitor-medicina-v2.vercel.app</a> para adicionar o seu email à lista de subscritores e receber relatórios semanais automaticamente.
   </div>
   
   <div class="footer">
     <p>Este relatório foi gerado automaticamente pelo Monitor de Medicina Sem Sangue.</p>
     <p style="font-size: 12px; color: #888;">
-      Para cancelar a subscrição, responda a este email com "CANCELAR".
+      Para cancelar a subscrição de relatórios automáticos, responda a este email com "CANCELAR".
     </p>
   </div>
 </body>
@@ -236,7 +255,7 @@ function generateEmailContent(articles: Article[]): { html: string; text: string
 
   const text = `
 MONITOR DE MEDICINA SEM SANGUE
-Relatório de Pesquisa Semanal
+${headerSubtitle}
 =====================================
 
 Gerado em: ${formatDate(now)}
@@ -260,7 +279,7 @@ ${i + 1}. ${a.title}${a.isPortuguese ? ' 🇵🇹 PT' : ''}
 
 -----------------------------------
 
-Para subscrever: monitor-medicina-v2.vercel.app
+Para subscrever relatórios automáticos: monitor-medicina-v2.vercel.app
 
 Este relatório foi gerado automaticamente.
 Para cancelar a subscrição, responda a este email com "CANCELAR".
