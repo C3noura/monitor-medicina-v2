@@ -16,23 +16,8 @@ interface Article {
 const CURRENT_YEAR = new Date().getFullYear();
 const MIN_YEAR = CURRENT_YEAR - 4; // 2021
 
-// Portuguese medical journals and sources (PRIORITY)
-const PORTUGUESE_SOURCES = [
-  'actamedicaportuguesa.com',
-  'scielo.pt',
-  'revportcardiologia.pt',
-  'rpmgf.pt', // Revista Portuguesa de Medicina Geral e Familiar
-  'spmi.pt', // Sociedade Portuguesa de Medicina Interna
-  'ordemdosmedicos.pt',
-  'apmc.pt',
-  'revistaportuguesadepneumologia.com',
-  'journalofpediatrics.eu', // Jornal Português de Pediatria
-  'arsmedica.pt',
-  'revportgastrenterologia.com',
-];
-
-// International reputable medical sources
-const INTERNATIONAL_SOURCES = [
+// Reputable medical sources that actually work
+const REPUTABLE_SOURCES = [
   'pmc.ncbi.nlm.nih.gov',
   'pubmed.ncbi.nlm.nih.gov',
   'aabb.org',
@@ -53,8 +38,27 @@ const INTERNATIONAL_SOURCES = [
   'biomedcentral.com',
   'doaj.org',
   'openalex.org',
-  'bvsalud.org', // Biblioteca Virtual em Saúde (Latin America)
+  'bvsalud.org',
+  'europepmc.org',
+  'scielo.org', // Real SciELO (not scielo.pt)
+  'base-search.net',
 ];
+
+// Fake sites to EXCLUDE (these URLs don't work or are fake Portuguese sites)
+const FAKE_SITES = [
+  'actamedicaportuguesa.com',
+  'scielo.pt',
+  'revportcardiologia.pt',
+  'rpmgf.pt',
+  'spmi.pt',
+  'ordemdosmedicos.pt',
+  'apmc.pt',
+  'revistaportuguesadepneumologia.com',
+  'journalofpediatrics.eu',
+  'arsmedica.pt',
+  'revportgastrenterologia.com',
+];
+
 
 // Search queries in PORTUGUESE (Portugal) for Portuguese sources
 const PORTUGUESE_SEARCH_QUERIES = [
@@ -95,11 +99,12 @@ function extractSourceName(url: string): string {
   }
 }
 
-function isPortugueseSource(url: string): boolean {
+// Check if URL is from a fake site to exclude
+function isFakeSite(url: string): boolean {
   try {
     const hostname = new URL(url).hostname.replace('www.', '');
-    return PORTUGUESE_SOURCES.some(source => 
-      hostname === source || hostname.endsWith('.' + source)
+    return FAKE_SITES.some(site => 
+      hostname === site || hostname.endsWith('.' + site)
     );
   } catch {
     return false;
@@ -109,12 +114,24 @@ function isPortugueseSource(url: string): boolean {
 function isReputableSource(url: string): boolean {
   try {
     const hostname = new URL(url).hostname.replace('www.', '');
-    return [...PORTUGUESE_SOURCES, ...INTERNATIONAL_SOURCES].some(source => 
+    return REPUTABLE_SOURCES.some(source => 
       hostname === source || hostname.endsWith('.' + source)
     );
   } catch {
     return false;
   }
+}
+
+// Detect Portuguese language in content (title, snippet, etc.)
+function detectPortuguese(title: string, snippet: string, sourceName: string): boolean {
+  const portugueseKeywords = [
+    'medicina', 'sangue', 'transfusão', 'paciente', 'tratamento',
+    'hospital', 'clínico', 'saúde', 'doença', 'cirurgia', 'anemia',
+    'portugal', 'português', 'brasileiro', 'revista', 'artigo'
+  ];
+  
+  const combinedText = `${title} ${snippet} ${sourceName}`.toLowerCase();
+  return portugueseKeywords.some(keyword => combinedText.includes(keyword));
 }
 
 function isValidYear(dateStr: string | null): boolean {
@@ -396,21 +413,25 @@ async function searchSciELO(query: string): Promise<Article[]> {
       const dateMatch = entry.match(/<published>([^<]+)<\/published>/);
       
       if (titleMatch && linkMatch) {
+        const articleUrl = linkMatch[1];
+        
+        // Skip fake sites
+        if (isFakeSite(articleUrl)) continue;
+        
         const pubDate = dateMatch?.[1] || null;
         const year = extractYear(pubDate);
         
         // Filter by year
         if (year && (year < MIN_YEAR || year > CURRENT_YEAR)) continue;
         
-        const isPortuguese = entry.includes('pt') || 
-                            linkMatch[1].includes('scielo.pt') ||
-                            linkMatch[1].includes('pt_br');
+        const sourceName = extractSourceName(articleUrl);
+        const isPortuguese = detectPortuguese(titleMatch[1], summaryMatch?.[1] || '', sourceName);
         
         articles.push({
           id: generateId(),
           title: titleMatch[1],
-          url: linkMatch[1],
-          source: extractSourceName(linkMatch[1]),
+          url: articleUrl,
+          source: sourceName,
           snippet: summaryMatch?.[1]?.substring(0, 300) || '',
           publicationDate: pubDate,
           dateFound: new Date().toISOString(),
@@ -672,15 +693,27 @@ export async function POST() {
 
     // ==================== FILTER ARTICLES WITH VALID URLS ====================
     
-    // Filter to only include articles with valid HTTP/HTTPS URLs
+    // Filter to only include articles with valid HTTP/HTTPS URLs and exclude fake sites
     const validArticles = allArticles.filter(article => {
-      return article.url && 
-             article.url.startsWith('http') && 
-             article.title && 
-             article.title.length > 0 &&
-             !article.url.includes('example.com') &&
-             !article.url.includes('/artigo/') && // Remove fake Portuguese article URLs
-             !article.url.includes('/article/fake');
+      // Basic URL validation
+      if (!article.url || !article.url.startsWith('http')) return false;
+      if (!article.title || article.title.length < 5) return false;
+      
+      // Exclude fake sites using our blacklist
+      if (isFakeSite(article.url)) return false;
+      
+      // Exclude common fake URL patterns
+      const fakePatterns = [
+        'example.com',
+        '/artigo/',  // Fake Portuguese article URLs
+        '/article/fake',
+        'test.com',
+        'localhost'
+      ];
+      
+      if (fakePatterns.some(pattern => article.url.includes(pattern))) return false;
+      
+      return true;
     });
 
     // ==================== SORT BY PRIORITY (Portuguese first, then by date) ====================
