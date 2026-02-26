@@ -85,26 +85,17 @@ interface EmailResult {
   mailtoLink?: string
 }
 
-// Portuguese medical sources (PRIORITY)
-const PORTUGUESE_SOURCES = [
-  { name: 'Acta Médica Portuguesa', url: 'actamedicaportuguesa.com', icon: '🇵🇹' },
-  { name: 'SciELO Portugal', url: 'scielo.pt', icon: '🇵🇹' },
-  { name: 'Revista Portuguesa Cardiologia', url: 'revportcardiologia.pt', icon: '🇵🇹' },
-  { name: 'Revista Portuguesa MG&F', url: 'rpmgf.pt', icon: '🇵🇹' },
+// APIs and databases being searched
+const SEARCH_SOURCES = [
+  { name: 'PubMed/PMC', url: 'pmc.ncbi.nlm.nih.gov', icon: '🔬', type: 'international' as const },
+  { name: 'Europe PMC', url: 'europepmc.org', icon: '🇪🇺', type: 'international' as const },
+  { name: 'WHO', url: 'who.int', icon: '🌍', type: 'international' as const },
+  { name: 'Science Direct', url: 'sciencedirect.com', icon: '📑', type: 'international' as const },
+  { name: 'DOAJ', url: 'doaj.org', icon: '📖', type: 'multilingual' as const },
+  { name: 'SciELO', url: 'scielo.org', icon: '🇵🇹', type: 'multilingual' as const },
+  { name: 'OpenAlex', url: 'openalex.org', icon: '🎓', type: 'international' as const },
+  { name: 'BASE', url: 'base-search.net', icon: '🔍', type: 'multilingual' as const },
 ]
-
-// International reputable sources being monitored
-const INTERNATIONAL_SOURCES = [
-  { name: 'PubMed/PMC', url: 'pmc.ncbi.nlm.nih.gov', icon: '🔬' },
-  { name: 'WHO', url: 'who.int', icon: '🌍' },
-  { name: 'Science Direct', url: 'sciencedirect.com', icon: '📑' },
-  { name: 'Europe PMC', url: 'europepmc.org', icon: '🇪🇺' },
-  { name: 'DOAJ', url: 'doaj.org', icon: '📖' },
-  { name: 'OpenAlex', url: 'openalex.org', icon: '🎓' },
-]
-
-// All sources combined
-const MONITORED_SOURCES = [...PORTUGUESE_SOURCES, ...INTERNATIONAL_SOURCES]
 
 // Date range for articles (last 4 years)
 const DATE_RANGE = '2021-2025'
@@ -527,7 +518,7 @@ export default function Dashboard() {
                 <Skeleton className="h-6 w-16" />
               ) : (
                 <p className="text-3xl font-bold text-purple-600">
-                  {new Set(articles.map(a => a.source)).size || MONITORED_SOURCES.length}
+                  {new Set(articles.map(a => a.source)).size || SEARCH_SOURCES.length}
                 </p>
               )}
             </CardContent>
@@ -704,52 +695,20 @@ export default function Dashboard() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Portuguese Sources Card */}
-            <Card className="border-green-200 bg-green-50/30">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <span className="text-xl">🇵🇹</span>
-                  Fontes Portuguesas (Prioridade)
-                </CardTitle>
-                <CardDescription>
-                  Revistas médicas portuguesas
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {PORTUGUESE_SOURCES.map((source) => (
-                    <div 
-                      key={source.url}
-                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-white transition-colors"
-                    >
-                      <span className="text-lg">{source.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900 text-sm">{source.name}</p>
-                        <p className="text-xs text-slate-500 truncate">{source.url}</p>
-                      </div>
-                      <Badge variant="default" className="text-xs bg-green-600 text-white">
-                        Prioridade
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* International Sources Card */}
+            {/* Search Sources Card */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Database className="w-5 h-5 text-violet-500" />
-                  Fontes Internacionais
+                  Fontes de Pesquisa
                 </CardTitle>
                 <CardDescription>
-                  Bases de dados médicas mundiais ({DATE_RANGE})
+                  APIs e bases de dados pesquisadas ({DATE_RANGE})
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {INTERNATIONAL_SOURCES.map((source) => (
+                  {SEARCH_SOURCES.map((source) => (
                     <div 
                       key={source.url}
                       className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors"
@@ -759,11 +718,20 @@ export default function Dashboard() {
                         <p className="font-medium text-slate-900 text-sm">{source.name}</p>
                         <p className="text-xs text-slate-500 truncate">{source.url}</p>
                       </div>
-                      <Badge variant="outline" className="text-xs">
-                        Ativo
-                      </Badge>
+                      {source.type === 'multilingual' ? (
+                        <Badge variant="default" className="text-xs bg-green-600 text-white">
+                          🇵🇹 Multilíngue
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">
+                          Ativo
+                        </Badge>
+                      )}
                     </div>
                   ))}
+                </div>
+                <div className="mt-3 pt-3 border-t text-xs text-slate-500">
+                  <p>💡 As fontes multilíngues podem retornar artigos em português.</p>
                 </div>
               </CardContent>
             </Card>
