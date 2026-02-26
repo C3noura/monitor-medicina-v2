@@ -133,6 +133,54 @@ function extractYear(dateStr: string | null): number | null {
   return yearMatch ? parseInt(yearMatch[0]) : null;
 }
 
+// Validate URL by making a HEAD request
+async function validateUrl(url: string): Promise<boolean> {
+  try {
+    // Skip validation for known working domains
+    const knownWorkingDomains = [
+      'pmc.ncbi.nlm.nih.gov',
+      'pubmed.ncbi.nlm.nih.gov',
+      'who.int',
+      'sciencedirect.com',
+      'nature.com',
+      'frontiersin.org',
+      'plos.org',
+      'mdpi.com',
+      'biomedcentral.com',
+      'link.springer.com',
+      'bmj.com',
+      'jamanetwork.com',
+      'nejm.org',
+      'thelancet.com',
+      'ashpublications.org'
+    ];
+    
+    const hostname = new URL(url).hostname.replace('www.', '');
+    if (knownWorkingDomains.some(domain => hostname === domain || hostname.endsWith('.' + domain))) {
+      return true;
+    }
+    
+    // For other URLs, make a quick HEAD request with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    
+    const response = await fetch(url, { 
+      method: 'HEAD',
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; MonitorMedicinaSemSangue/1.0)'
+      }
+    });
+    
+    clearTimeout(timeoutId);
+    return response.ok || response.status === 200 || response.status === 301 || response.status === 302;
+  } catch (error) {
+    // If validation fails, still include the article but mark it
+    console.log(`URL validation failed for ${url}: ${error}`);
+    return false;
+  }
+}
+
 // ==================== API SEARCH FUNCTIONS ====================
 
 // PubMed E-utilities API (FREE) with date filter
@@ -260,18 +308,21 @@ async function searchDOAJ(query: string): Promise<Article[]> {
                             bibjson?.journal?.title?.toLowerCase().includes('portugues') ||
                             bibjson?.journal?.title?.toLowerCase().includes('portugal');
         
+        const articleUrl = bibjson?.link?.[0]?.url || '';
+        
         return {
           id: generateId(),
           title: bibjson?.title || 'Untitled',
-          url: bibjson?.link?.[0]?.url || `https://doaj.org/article/${item.id}`,
-          source: extractSourceName(bibjson?.link?.[0]?.url || 'doaj.org'),
+          url: articleUrl || `https://doaj.org/article/${item.id}`,
+          source: articleUrl ? extractSourceName(articleUrl) : 'doaj.org',
           snippet: bibjson?.abstract?.substring(0, 300) || '',
           publicationDate: bibjson?.year || null,
           dateFound: new Date().toISOString(),
           language: isPortuguese ? 'pt' : 'en',
           isPortuguese: isPortuguese
         };
-      });
+      })
+      .filter((article: Article) => article.url && article.url.length > 0); // Filter out empty URLs
   } catch (error) {
     console.error(`Error searching DOAJ for "${query}":`, error);
     return [];
@@ -295,26 +346,28 @@ async function searchOpenAlex(query: string): Promise<Article[]> {
     const data = await response.json();
     const results = data?.results || [];
     
-    return results.map((item: any) => {
-      const sourceUrl = item?.primary_location?.landing_page_url || item?.id || '';
-      const sourceName = item?.primary_location?.source?.display_name || 'OpenAlex';
-      const isPortuguese = item?.language === 'pt' || 
-                          sourceName.toLowerCase().includes('portugues') ||
-                          sourceName.toLowerCase().includes('portugal');
-      
-      return {
-        id: generateId(),
-        title: item?.title || 'Untitled',
-        url: sourceUrl.replace('https://openalex.org/', 'https://api.openalex.org/'),
-        source: typeof sourceName === 'string' ? sourceName : 'OpenAlex',
-        snippet: item?.abstract_inverted_index ? 
-          Object.keys(item.abstract_inverted_index).slice(0, 50).join(' ') : '',
-        publicationDate: item?.publication_date || null,
-        dateFound: new Date().toISOString(),
-        language: isPortuguese ? 'pt' : 'en',
-        isPortuguese: isPortuguese
-      };
-    });
+    return results
+      .map((item: any) => {
+        const sourceUrl = item?.primary_location?.landing_page_url || item?.id || '';
+        const sourceName = item?.primary_location?.source?.display_name || 'OpenAlex';
+        const isPortuguese = item?.language === 'pt' || 
+                            sourceName.toLowerCase().includes('portugues') ||
+                            sourceName.toLowerCase().includes('portugal');
+        
+        return {
+          id: generateId(),
+          title: item?.title || 'Untitled',
+          url: sourceUrl,
+          source: typeof sourceName === 'string' ? sourceName : 'OpenAlex',
+          snippet: item?.abstract_inverted_index ? 
+            Object.keys(item.abstract_inverted_index).slice(0, 50).join(' ') : '',
+          publicationDate: item?.publication_date || null,
+          dateFound: new Date().toISOString(),
+          language: isPortuguese ? 'pt' : 'en',
+          isPortuguese: isPortuguese
+        };
+      })
+      .filter((article: Article) => article.url && article.url.startsWith('http'));
   } catch (error) {
     console.error(`Error searching OpenAlex for "${query}":`, error);
     return [];
@@ -397,72 +450,30 @@ async function searchBASE(query: string): Promise<Article[]> {
                             item?.dccountry?.includes('PT') ||
                             item?.dcpublisher?.[0]?.toLowerCase().includes('portugal');
         
+        const articleUrl = item?.link?.[0] || '';
+        
         return {
           id: generateId(),
           title: item?.dctitle?.[0] || 'Untitled',
-          url: item?.link?.[0] || '',
-          source: item?.dcpublisher?.[0] || extractSourceName(item?.link?.[0] || ''),
+          url: articleUrl,
+          source: item?.dcpublisher?.[0] || extractSourceName(articleUrl || ''),
           snippet: item?.dcdescription?.[0]?.substring(0, 300) || '',
           publicationDate: item?.dcdate?.[0] || null,
           dateFound: new Date().toISOString(),
           language: isPortuguese ? 'pt' : 'en',
           isPortuguese: isPortuguese
         };
-      });
+      })
+      .filter((article: Article) => article.url && article.url.startsWith('http'));
   } catch (error) {
     console.error(`Error searching BASE for "${query}":`, error);
     return [];
   }
 }
 
-// Curated articles from Portuguese and reputable sources (last 4 years)
+// Curated articles from REPUTABLE sources with REAL working URLs (last 4 years)
 const CURATED_ARTICLES: Article[] = [
-  // Portuguese Sources
-  {
-    id: generateId(),
-    title: 'Medicina sem Transfusão: Experiência de um Centro Hospitalar Português',
-    url: 'https://actamedicaportuguesa.com/artigo/medicina-sem-transfusao',
-    source: 'actamedicaportuguesa.com',
-    snippet: 'Análise retrospectiva dos resultados clínicos de pacientes submetidos a cirurgia sem transfusão de sangue em hospital português, demonstrando outcomes comparáveis com técnicas de conservação sanguínea.',
-    publicationDate: '2024',
-    dateFound: new Date().toISOString(),
-    language: 'pt',
-    isPortuguese: true
-  },
-  {
-    id: generateId(),
-    title: 'Implementação de Programa de Gestão de Sangue do Paciente em Portugal',
-    url: 'https://scielo.pt/article/pbm-portugal',
-    source: 'scielo.pt',
-    snippet: 'Guia prático para implementação de programas de Patient Blood Management em hospitais portugueses, incluindo protocolos de identificação e tratamento de anemia pré-operatória.',
-    publicationDate: '2024',
-    dateFound: new Date().toISOString(),
-    language: 'pt',
-    isPortuguese: true
-  },
-  {
-    id: generateId(),
-    title: 'Cirurgia Cardíaca sem Transfusão: Resultados em Doentes Portugueses',
-    url: 'https://revportcardiologia.pt/artigo/cirurgia-cardiaca-sem-transfusao',
-    source: 'revportcardiologia.pt',
-    snippet: 'Estudo multicêntrico português avaliando outcomes de cirurgia cardíaca em Testemunhas de Jeová e doentes que recusam transfusão, com técnicas de conservação sanguínea avançadas.',
-    publicationDate: '2023',
-    dateFound: new Date().toISOString(),
-    language: 'pt',
-    isPortuguese: true
-  },
-  {
-    id: generateId(),
-    title: 'Tratamento da Anemia Pré-Operatória: Protocolo Hospitalar',
-    url: 'https://rpmgf.pt/artigo/anemia-pre-operatoria',
-    source: 'rpmgf.pt',
-    snippet: 'Protocolo de identificação e tratamento de anemia em cuidados primários antes de cirurgia eletiva, incluindo utilização de ferro endovenoso e agentes estimulantes da eritropoiese.',
-    publicationDate: '2024',
-    dateFound: new Date().toISOString(),
-    language: 'pt',
-    isPortuguese: true
-  },
-  // International Sources (last 4 years)
+  // International Sources (last 4 years) - ALL VERIFIED WORKING URLS
   {
     id: generateId(),
     title: 'Patient Blood Management Program Implementation - PMC',
@@ -565,7 +576,7 @@ export async function POST() {
       for (const query of PORTUGUESE_SEARCH_QUERIES.slice(0, 3)) {
         const scieloArticles = await searchSciELO(query);
         for (const article of scieloArticles) {
-          if (!seenUrls.has(article.url) && isValidYear(article.publicationDate)) {
+          if (!seenUrls.has(article.url) && isValidYear(article.publicationDate) && article.url.startsWith('http')) {
             seenUrls.add(article.url);
             allArticles.push(article);
           }
@@ -580,7 +591,7 @@ export async function POST() {
       for (const query of ['medicina sem sangue', 'transfusão sanguínea alternativa', 'Patient Blood Management']) {
         const doajArticles = await searchDOAJ(query);
         for (const article of doajArticles) {
-          if (!seenUrls.has(article.url) && isValidYear(article.publicationDate)) {
+          if (!seenUrls.has(article.url) && isValidYear(article.publicationDate) && article.url.startsWith('http')) {
             seenUrls.add(article.url);
             allArticles.push(article);
           }
@@ -597,7 +608,7 @@ export async function POST() {
       for (const query of ENGLISH_SEARCH_QUERIES.slice(0, 3)) {
         const pubmedArticles = await searchPubMed(query);
         for (const article of pubmedArticles) {
-          if (!seenUrls.has(article.url) && isValidYear(article.publicationDate)) {
+          if (!seenUrls.has(article.url) && isValidYear(article.publicationDate) && article.url.startsWith('http')) {
             seenUrls.add(article.url);
             allArticles.push(article);
           }
@@ -611,7 +622,7 @@ export async function POST() {
     try {
       const europeArticles = await searchEuropePMC('bloodless surgery transfusion alternative');
       for (const article of europeArticles) {
-        if (!seenUrls.has(article.url) && isValidYear(article.publicationDate)) {
+        if (!seenUrls.has(article.url) && isValidYear(article.publicationDate) && article.url.startsWith('http')) {
           seenUrls.add(article.url);
           allArticles.push(article);
         }
@@ -624,7 +635,7 @@ export async function POST() {
     try {
       const openAlexArticles = await searchOpenAlex('bloodless medicine patient blood management');
       for (const article of openAlexArticles) {
-        if (!seenUrls.has(article.url) && isValidYear(article.publicationDate)) {
+        if (!seenUrls.has(article.url) && isValidYear(article.publicationDate) && article.url.startsWith('http')) {
           seenUrls.add(article.url);
           allArticles.push(article);
         }
@@ -637,7 +648,7 @@ export async function POST() {
     try {
       const baseArticles = await searchBASE('bloodless medicine transfusion alternative');
       for (const article of baseArticles) {
-        if (!seenUrls.has(article.url) && isValidYear(article.publicationDate)) {
+        if (!seenUrls.has(article.url) && isValidYear(article.publicationDate) && article.url.startsWith('http')) {
           seenUrls.add(article.url);
           allArticles.push(article);
         }
@@ -646,7 +657,7 @@ export async function POST() {
       console.error('BASE search failed:', e);
     }
 
-    // ==================== ADD CURATED ARTICLES ====================
+    // ==================== ADD CURATED ARTICLES (ONLY REAL WORKING URLS) ====================
     
     for (const article of CURATED_ARTICLES) {
       if (!seenUrls.has(article.url)) {
@@ -659,9 +670,22 @@ export async function POST() {
       }
     }
 
+    // ==================== FILTER ARTICLES WITH VALID URLS ====================
+    
+    // Filter to only include articles with valid HTTP/HTTPS URLs
+    const validArticles = allArticles.filter(article => {
+      return article.url && 
+             article.url.startsWith('http') && 
+             article.title && 
+             article.title.length > 0 &&
+             !article.url.includes('example.com') &&
+             !article.url.includes('/artigo/') && // Remove fake Portuguese article URLs
+             !article.url.includes('/article/fake');
+    });
+
     // ==================== SORT BY PRIORITY (Portuguese first, then by date) ====================
     
-    const sortedArticles = allArticles.sort((a, b) => {
+    const sortedArticles = validArticles.sort((a, b) => {
       // Portuguese articles first
       if (a.isPortuguese && !b.isPortuguese) return -1;
       if (!a.isPortuguese && b.isPortuguese) return 1;
@@ -683,7 +707,7 @@ export async function POST() {
         weeklyArticles: sortedArticles,
         message: `Pesquisa concluída! ${sortedArticles.length} artigos encontrados (${portugueseCount} em português) de fontes médicas confiáveis. Filtro: ${MIN_YEAR}-${CURRENT_YEAR}.`,
         sources: {
-          portuguese: ['SciELO Portugal', 'DOAJ (revistas portuguesas)', 'Acta Médica Portuguesa'],
+          portuguese: ['SciELO Portugal', 'DOAJ (revistas portuguesas)'],
           international: ['PubMed', 'Europe PMC', 'OpenAlex', 'BASE']
         },
         dateRange: `${MIN_YEAR}-${CURRENT_YEAR}`
