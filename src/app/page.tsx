@@ -317,7 +317,7 @@ export default function Dashboard() {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {/* Last Search Card */}
-          <Card className="border-l-4 border-l-red-500">
+          <Card className="border-l-4 border-l-violet-600">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
                 <Clock className="w-4 h-4 text-violet-500" />
