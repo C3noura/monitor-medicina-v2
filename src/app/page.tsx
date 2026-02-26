@@ -32,6 +32,8 @@ interface Article {
   snippet: string
   publicationDate: string | null
   dateFound: string
+  language?: string
+  isPortuguese?: boolean
 }
 
 interface SystemStatus {
@@ -50,8 +52,14 @@ interface SearchResult {
   success: boolean
   data?: {
     articlesFound: number
+    portugueseArticles?: number
     weeklyArticles: Article[]
     message: string
+    dateRange?: string
+    sources?: {
+      portuguese: string[]
+      international: string[]
+    }
   }
   error?: string
 }
@@ -71,17 +79,29 @@ interface EmailResult {
   mailtoLink?: string
 }
 
-// Reputable sources being monitored
-const MONITORED_SOURCES = [
-  { name: 'PubMed/PMC', url: 'pmc.ncbi.nlm.nih.gov', icon: '🔬' },
-  { name: 'AABB', url: 'aabb.org', icon: '🏥' },
-  { name: 'WHO', url: 'who.int', icon: '🌍' },
-  { name: 'ASH Publications', url: 'ashpublications.org', icon: '📚' },
-  { name: 'Science Direct', url: 'sciencedirect.com', icon: '📑' },
-  { name: 'Springer', url: 'link.springer.com', icon: '📖' },
-  { name: 'JMIR', url: 'jmir.org', icon: '💻' },
-  { name: 'ResearchGate', url: 'researchgate.net', icon: '🎓' },
+// Portuguese medical sources (PRIORITY)
+const PORTUGUESE_SOURCES = [
+  { name: 'Acta Médica Portuguesa', url: 'actamedicaportuguesa.com', icon: '🇵🇹' },
+  { name: 'SciELO Portugal', url: 'scielo.pt', icon: '🇵🇹' },
+  { name: 'Revista Portuguesa Cardiologia', url: 'revportcardiologia.pt', icon: '🇵🇹' },
+  { name: 'Revista Portuguesa MG&F', url: 'rpmgf.pt', icon: '🇵🇹' },
 ]
+
+// International reputable sources being monitored
+const INTERNATIONAL_SOURCES = [
+  { name: 'PubMed/PMC', url: 'pmc.ncbi.nlm.nih.gov', icon: '🔬' },
+  { name: 'WHO', url: 'who.int', icon: '🌍' },
+  { name: 'Science Direct', url: 'sciencedirect.com', icon: '📑' },
+  { name: 'Europe PMC', url: 'europepmc.org', icon: '🇪🇺' },
+  { name: 'DOAJ', url: 'doaj.org', icon: '📖' },
+  { name: 'OpenAlex', url: 'openalex.org', icon: '🎓' },
+]
+
+// All sources combined
+const MONITORED_SOURCES = [...PORTUGUESE_SOURCES, ...INTERNATIONAL_SOURCES]
+
+// Date range for articles (last 4 years)
+const DATE_RANGE = '2021-2025'
 
 // Local storage keys
 const STORAGE_KEYS = {
@@ -370,9 +390,14 @@ export default function Dashboard() {
               {isLoading ? (
                 <Skeleton className="h-6 w-16" />
               ) : (
-                <p className="text-3xl font-bold text-green-600">
-                  {articles.length}
-                </p>
+                <div>
+                  <p className="text-3xl font-bold text-green-600">
+                    {articles.length}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {articles.filter(a => a.isPortuguese).length} em português
+                  </p>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -449,7 +474,7 @@ export default function Dashboard() {
                   Artigos Encontrados ({articles.length})
                 </CardTitle>
                 <CardDescription>
-                  Últimos artigos sobre medicina sem sangue de fontes médicas conceituadas
+                  Artigos de {DATE_RANGE} sobre medicina sem sangue • Prioridade: fontes portuguesas 🇵🇹
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -489,12 +514,17 @@ export default function Dashboard() {
                                 <ExternalLink className="w-4 h-4 text-slate-400 flex-shrink-0 mt-1 group-hover:text-violet-500" />
                               </div>
                               <div className="flex items-center gap-2 mt-2">
+                                {article.isPortuguese && (
+                                  <Badge variant="default" className="text-xs bg-green-600 text-white hover:bg-green-700">
+                                    🇵🇹 PT
+                                  </Badge>
+                                )}
                                 <Badge variant="secondary" className="text-xs bg-violet-50 text-violet-700 hover:bg-violet-100">
                                   {article.source}
                                 </Badge>
                                 {article.publicationDate && (
                                   <span className="text-xs text-slate-500">
-                                    {new Date(article.publicationDate).toLocaleDateString('pt-BR')}
+                                    {article.publicationDate}
                                   </span>
                                 )}
                               </div>
@@ -516,20 +546,52 @@ export default function Dashboard() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Sources Card */}
-            <Card>
+            {/* Portuguese Sources Card */}
+            <Card className="border-green-200 bg-green-50/30">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Database className="w-5 h-5 text-violet-500" />
-                  Fontes Monitoradas
+                  <span className="text-xl">🇵🇹</span>
+                  Fontes Portuguesas (Prioridade)
                 </CardTitle>
                 <CardDescription>
-                  Revistas e bases de dados médicas conceituadas
+                  Revistas médicas portuguesas
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {MONITORED_SOURCES.map((source, index) => (
+                  {PORTUGUESE_SOURCES.map((source) => (
+                    <div 
+                      key={source.url}
+                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-white transition-colors"
+                    >
+                      <span className="text-lg">{source.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 text-sm">{source.name}</p>
+                        <p className="text-xs text-slate-500 truncate">{source.url}</p>
+                      </div>
+                      <Badge variant="default" className="text-xs bg-green-600 text-white">
+                        Prioridade
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* International Sources Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Database className="w-5 h-5 text-violet-500" />
+                  Fontes Internacionais
+                </CardTitle>
+                <CardDescription>
+                  Bases de dados médicas mundiais ({DATE_RANGE})
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {INTERNATIONAL_SOURCES.map((source) => (
                     <div 
                       key={source.url}
                       className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors"
