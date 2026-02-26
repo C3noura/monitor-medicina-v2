@@ -19,7 +19,8 @@ export const metadata: Metadata = {
   keywords: ["medicina sem sangue", "bloodless medicine", "Patient Blood Management", "PBM", "transfusão", "pesquisa médica"],
   authors: [{ name: "Monitor de Medicina Sem Sangue" }],
   icons: {
-    icon: "/logo.svg",
+    icon: "/favicon.png",
+    apple: "/logo-icon.png",
   },
   openGraph: {
     title: "Monitor de Medicina Sem Sangue",

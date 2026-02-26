@@ -280,8 +280,12 @@ export default function Dashboard() {
       <header className="bg-gradient-to-r to-violet-700 to-violet-800 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-white/10 rounded-xl">
-              <Heart className="w-8 h-8" />
+            <div className="p-2 bg-white rounded-xl shadow-lg">
+              <img 
+                src="/logo-icon.png" 
+                alt="Logo Monitor de Medicina Sem Sangue" 
+                className="w-12 h-12 sm:w-14 sm:h-14 object-contain"
+              />
             </div>
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
@@ -621,9 +625,13 @@ export default function Dashboard() {
       <footer className="border-t bg-slate-50 mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2 text-slate-600">
-              <Heart className="w-5 h-5 text-violet-500" />
-              <span className="text-sm">Monitor de Medicina Sem Sangue © {new Date().getFullYear()}</span>
+            <div className="flex items-center gap-3">
+              <img 
+                src="/logo-icon.png" 
+                alt="Logo" 
+                className="w-8 h-8 object-contain"
+              />
+              <span className="text-sm text-slate-600">Monitor de Medicina Sem Sangue © {new Date().getFullYear()}</span>
             </div>
             <div className="text-sm text-slate-500">
               Pesquisas realizadas em fontes médicas confiáveis
