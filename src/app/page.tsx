@@ -100,6 +100,31 @@ const SEARCH_SOURCES = [
 // Date range for articles (last 4 years)
 const DATE_RANGE = '2021-2025'
 
+// Fake sites to exclude (URLs that don't work)
+const FAKE_SITES = [
+  'actamedicaportuguesa.com',
+  'scielo.pt',
+  'revportcardiologia.pt',
+  'rpmgf.pt',
+  'spmi.pt',
+  'ordemdosmedicos.pt',
+  'apmc.pt',
+  'revistaportuguesadepneumologia.com',
+  'journalofpediatrics.eu',
+  'arsmedica.pt',
+  'revportgastrenterologia.com',
+]
+
+// Check if URL is from a fake site
+function isFakeSite(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.replace('www.', '')
+    return FAKE_SITES.some(site => hostname === site || hostname.endsWith('.' + site))
+  } catch {
+    return false
+  }
+}
+
 // Local storage keys
 const STORAGE_KEYS = {
   articles: 'bloodless_medicine_articles',
@@ -201,13 +226,20 @@ export default function Dashboard() {
     setNotification({ type: 'success', message: `Email ${email} removido da lista` })
   }
 
-  // Load articles from localStorage
+  // Load articles from localStorage (and filter out fake sites)
   const loadFromStorage = useCallback(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.articles)
       if (stored) {
-        const parsed = JSON.parse(stored)
-        return parsed as Article[]
+        const parsed = JSON.parse(stored) as Article[]
+        // Filter out articles from fake sites
+        const validArticles = parsed.filter(article => !isFakeSite(article.url))
+        // If we filtered out some articles, update localStorage
+        if (validArticles.length !== parsed.length) {
+          localStorage.setItem(STORAGE_KEYS.articles, JSON.stringify(validArticles))
+          console.log(`Cleaned ${parsed.length - validArticles.length} fake articles from storage`)
+        }
+        return validArticles
       }
     } catch (error) {
       console.error('Error loading from localStorage:', error)
@@ -273,10 +305,16 @@ export default function Dashboard() {
       if (data.success && data.data) {
         const foundArticles = data.data.weeklyArticles || []
         
+        // Filter out articles from fake sites
+        const validFoundArticles = foundArticles.filter(a => !isFakeSite(a.url))
+        
         // Merge with existing articles, avoiding duplicates
         const existingUrls = new Set(articles.map(a => a.url))
-        const newArticles = foundArticles.filter(a => !existingUrls.has(a.url))
-        const mergedArticles = [...newArticles, ...articles].slice(0, 100)
+        const newArticles = validFoundArticles.filter(a => !existingUrls.has(a.url))
+        
+        // Also filter existing articles to remove any fake sites
+        const validExistingArticles = articles.filter(a => !isFakeSite(a.url))
+        const mergedArticles = [...newArticles, ...validExistingArticles].slice(0, 100)
         
         setArticles(mergedArticles)
         saveToStorage(mergedArticles)
