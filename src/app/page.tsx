@@ -40,7 +40,18 @@ interface Article {
   dateFound: string
   language?: string
   isPortuguese?: boolean
+  expiresAt?: string // Data de expiração (30 dias após dateFound)
+  authors?: string
+  year?: string
+  abstract?: string
+  hasFullText?: boolean
+  citationCount?: number
 }
+
+// Maximum number of articles to keep
+const MAX_ARTICLES = 15
+// Article expiration period in days
+const ARTICLE_EXPIRATION_DAYS = 30
 
 interface SystemStatus {
   lastSearch: {
@@ -123,6 +134,21 @@ function isFakeSite(url: string): boolean {
   } catch {
     return false
   }
+}
+
+// Check if article is expired
+function isExpired(article: Article): boolean {
+  if (!article.expiresAt) return false
+  return new Date(article.expiresAt) < new Date()
+}
+
+// Add expiration date to article (if not already present)
+function addExpirationDate(article: Article): Article {
+  // If article already has expiresAt, return as is
+  if (article.expiresAt) return article
+  const dateFound = new Date(article.dateFound || new Date())
+  const expiresAt = new Date(dateFound.getTime() + ARTICLE_EXPIRATION_DAYS * 24 * 60 * 60 * 1000)
+  return { ...article, expiresAt: expiresAt.toISOString() }
 }
 
 // Local storage keys
@@ -226,23 +252,39 @@ export default function Dashboard() {
     setNotification({ type: 'success', message: `Email ${email} removido da lista` })
   }
 
-  // Load articles from localStorage (and filter out fake sites)
+  // Load articles from localStorage (and filter out fake sites + expired + legacy)
   const loadFromStorage = useCallback(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.articles)
       if (stored) {
         const parsed = JSON.parse(stored) as Article[]
-        // Filter out articles from fake sites
-        const validArticles = parsed.filter(article => !isFakeSite(article.url))
+        const now = new Date()
+        
+        // Filter out articles from fake sites, expired articles, AND legacy articles (no expiresAt)
+        // Legacy articles without expiresAt are considered invalid and removed
+        const validArticles = parsed.filter(article => {
+          const isNotFake = !isFakeSite(article.url)
+          const hasExpiration = !!article.expiresAt // Must have expiration date
+          const isNotExpired = hasExpiration && new Date(article.expiresAt) > now
+          return isNotFake && hasExpiration && isNotExpired
+        })
+        
+        // ALWAYS limit to MAX_ARTICLES (15)
+        const limitedArticles = validArticles.slice(0, MAX_ARTICLES)
+        
         // If we filtered out some articles, update localStorage
-        if (validArticles.length !== parsed.length) {
-          localStorage.setItem(STORAGE_KEYS.articles, JSON.stringify(validArticles))
-          console.log(`Cleaned ${parsed.length - validArticles.length} fake articles from storage`)
+        if (limitedArticles.length !== parsed.length) {
+          const removedCount = parsed.length - limitedArticles.length
+          localStorage.setItem(STORAGE_KEYS.articles, JSON.stringify(limitedArticles))
+          console.log(`Cleaned ${removedCount} legacy/expired/fake articles from storage. Kept ${limitedArticles.length} valid articles.`)
         }
-        return validArticles
+        
+        return limitedArticles
       }
     } catch (error) {
       console.error('Error loading from localStorage:', error)
+      // Clear corrupted data
+      localStorage.removeItem(STORAGE_KEYS.articles)
     }
     return []
   }, [])
@@ -278,11 +320,27 @@ export default function Dashboard() {
     const loadData = async () => {
       setIsLoading(true)
       
-      // Load from localStorage first
-      const storedArticles = loadFromStorage()
-      if (storedArticles.length > 0) {
-        setArticles(storedArticles)
+      // Clear old localStorage and load fresh data
+      // Force clean legacy articles (older version without expiration)
+      const stored = localStorage.getItem(STORAGE_KEYS.articles)
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored) as Article[]
+          // If any article doesn't have expiresAt, clear everything
+          const hasLegacyArticles = parsed.some(a => !a.expiresAt)
+          if (hasLegacyArticles || parsed.length > MAX_ARTICLES) {
+            console.log('Clearing legacy articles from localStorage')
+            localStorage.removeItem(STORAGE_KEYS.articles)
+            localStorage.removeItem(STORAGE_KEYS.lastSearch)
+          }
+        } catch {
+          localStorage.removeItem(STORAGE_KEYS.articles)
+        }
       }
+      
+      // Load from localStorage (now clean)
+      const storedArticles = loadFromStorage()
+      setArticles(storedArticles)
       
       // Load subscribers
       const storedSubscribers = loadSubscribers()
@@ -310,18 +368,25 @@ export default function Dashboard() {
         
         // Merge with existing articles, avoiding duplicates
         const existingUrls = new Set(articles.map(a => a.url))
-        const newArticles = validFoundArticles.filter(a => !existingUrls.has(a.url))
+        const newArticlesWithExpiration = validFoundArticles
+          .filter(a => !existingUrls.has(a.url))
+          .map(addExpirationDate)
         
-        // Also filter existing articles to remove any fake sites
-        const validExistingArticles = articles.filter(a => !isFakeSite(a.url))
-        const mergedArticles = [...newArticles, ...validExistingArticles].slice(0, 100)
+        // Also filter existing articles to remove any fake sites AND expired
+        const now = new Date()
+        const validExistingArticles = articles.filter(a => {
+          const isNotFake = !isFakeSite(a.url)
+          const isNotExpired = !a.expiresAt || new Date(a.expiresAt) > now
+          return isNotFake && isNotExpired
+        })
+        const mergedArticles = [...newArticlesWithExpiration, ...validExistingArticles].slice(0, MAX_ARTICLES)
         
         setArticles(mergedArticles)
         saveToStorage(mergedArticles)
         
         setNotification({ 
           type: 'success', 
-          message: `${data.data.message} ${newArticles.length} novos artigos encontrados.` 
+          message: `${data.data.message} ${newArticlesWithExpiration.length} novos artigos encontrados.` 
         })
       } else {
         setNotification({ 

@@ -69,7 +69,13 @@ export interface Article {
   snippet: string;
   publicationDate: string | null;
   dateFound: string;
+  expiresAt: string; // Data de expiração (30 dias após dateFound)
 }
+
+// Maximum number of articles to keep
+const MAX_ARTICLES = 15;
+// Article expiration period in days
+const ARTICLE_EXPIRATION_DAYS = 30;
 
 export interface LastSearchData {
   lastSearchTimestamp: string | null;
@@ -148,11 +154,12 @@ export function writeLastSearchData(data: LastSearchData): void {
   }
 }
 
-// Read articles data
+// Read articles data - with automatic cleanup of legacy/expired articles
 export function readArticlesData(): ArticlesData {
-  // Return from memory cache if available
+  // Return from memory cache if available (but filter first)
   if (memoryCache.articles.length > 0) {
-    return { articles: memoryCache.articles, lastUpdated: new Date().toISOString() };
+    const validArticles = filterExpiredArticles(memoryCache.articles).slice(0, MAX_ARTICLES);
+    return { articles: validArticles, lastUpdated: new Date().toISOString() };
   }
   
   try {
@@ -160,8 +167,19 @@ export function readArticlesData(): ArticlesData {
     if (fs.existsSync(ARTICLES_FILE)) {
       const data = fs.readFileSync(ARTICLES_FILE, 'utf-8');
       const parsed = JSON.parse(data);
-      memoryCache.articles = parsed.articles || [];
-      return parsed;
+      const allArticles = parsed.articles || [];
+      
+      // Filter out expired/legacy articles and limit to MAX_ARTICLES
+      const validArticles = filterExpiredArticles(allArticles).slice(0, MAX_ARTICLES);
+      
+      // Update cache and file with cleaned articles
+      memoryCache.articles = validArticles;
+      if (validArticles.length !== allArticles.length) {
+        console.log(`Cleaned ${allArticles.length - validArticles.length} expired/legacy articles`);
+        writeArticlesData({ articles: validArticles, lastUpdated: new Date().toISOString() });
+      }
+      
+      return { articles: validArticles, lastUpdated: parsed.lastUpdated };
     }
   } catch (error) {
     console.error('Error reading articles data:', error);
@@ -206,7 +224,8 @@ export async function performSearch(): Promise<Article[]> {
                 source: extractSourceName(item.url),
                 snippet: item.snippet || '',
                 publicationDate: item.date || null,
-                dateFound: new Date().toISOString()
+                dateFound: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + ARTICLE_EXPIRATION_DAYS * 24 * 60 * 60 * 1000).toISOString()
               };
               
               // Avoid duplicates
@@ -229,19 +248,39 @@ export async function performSearch(): Promise<Article[]> {
   }
 }
 
+// Filter out expired articles (articles without expiresAt are also considered expired)
+function filterExpiredArticles(articles: Article[]): Article[] {
+  const now = new Date();
+  return articles.filter(a => {
+    // Articles without expiresAt are considered LEGACY and EXPIRED - remove them
+    if (!a.expiresAt) return false;
+    return new Date(a.expiresAt) > now;
+  });
+}
+
+// Add expiration date to articles
+function addExpirationDate(article: Article): Article {
+  const dateFound = new Date(article.dateFound || new Date());
+  const expiresAt = new Date(dateFound.getTime() + ARTICLE_EXPIRATION_DAYS * 24 * 60 * 60 * 1000);
+  return { ...article, expiresAt: expiresAt.toISOString() };
+}
+
 // Save search results
 export function saveSearchResults(articles: Article[]): void {
   // Read existing articles
   const existingData = readArticlesData();
   
+  // Filter out expired articles first
+  const validExistingArticles = filterExpiredArticles(existingData.articles);
+  
   // Merge new articles with existing, avoiding duplicates
-  const existingUrls = new Set(existingData.articles.map(a => a.url));
-  const newArticles = articles.filter(a => !existingUrls.has(a.url));
+  const existingUrls = new Set(validExistingArticles.map(a => a.url));
+  const newArticles = articles.filter(a => !existingUrls.has(a.url)).map(addExpirationDate);
   
-  const mergedArticles = [...newArticles, ...existingData.articles];
+  const mergedArticles = [...newArticles, ...validExistingArticles];
   
-  // Keep only last 100 articles
-  const limitedArticles = mergedArticles.slice(0, 100);
+  // Keep only last MAX_ARTICLES articles
+  const limitedArticles = mergedArticles.slice(0, MAX_ARTICLES);
   
   // Update last search data
   const now = new Date();
@@ -284,6 +323,7 @@ export function getSystemStatus(): {
   const lastSearch = readLastSearchData();
   const articles = readArticlesData();
   
+  // Return count of valid articles only (already filtered and limited)
   return {
     lastSearch,
     articlesCount: articles.articles.length,
@@ -291,12 +331,17 @@ export function getSystemStatus(): {
   };
 }
 
-// Get weekly articles (articles from the last 7 days)
+// Get weekly articles (articles from the last 7 days, excluding expired and legacy)
 export function getWeeklyArticles(): Article[] {
   const articles = readArticlesData();
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const now = new Date();
   
-  return articles.articles.filter(a => 
-    new Date(a.dateFound) >= weekAgo
-  );
+  return articles.articles.filter(a => {
+    // Must have expiresAt (no legacy articles)
+    if (!a.expiresAt) return false;
+    const isRecent = new Date(a.dateFound) >= weekAgo;
+    const isNotExpired = new Date(a.expiresAt) > now;
+    return isRecent && isNotExpired;
+  }).slice(0, MAX_ARTICLES);
 }
