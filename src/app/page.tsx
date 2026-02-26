@@ -275,9 +275,9 @@ export default function Dashboard() {
   const lastSearchInfo = getLastSearchInfo()
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-red-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-violet-50">
       {/* Header */}
-      <header className="bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg">
+      <header className="bg-gradient-to-r to-violet-700 to-violet-800 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-white/10 rounded-xl">
@@ -287,7 +287,7 @@ export default function Dashboard() {
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
                 Monitor de Medicina Sem Sangue
               </h1>
-              <p className="text-red-100 mt-1 text-sm sm:text-base">
+              <p className="text-violet-100 mt-1 text-sm sm:text-base">
                 Monitoramento automático de pesquisas médicas sobre tratamentos sem transfusão de sangue
               </p>
             </div>
@@ -301,12 +301,12 @@ export default function Dashboard() {
           <div className={`flex items-center gap-2 p-4 rounded-lg ${
             notification.type === 'success' 
               ? 'bg-green-50 text-green-800 border border-green-200' 
-              : 'bg-red-50 text-red-800 border border-red-200'
+              : 'bg-violet-50 text-violet-800 border border-violet-200'
           }`}>
             {notification.type === 'success' ? (
               <CheckCircle className="w-5 h-5 text-green-600" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-red-600" />
+              <AlertCircle className="w-5 h-5 text-violet-600" />
             )}
             <span>{notification.message}</span>
           </div>
@@ -320,7 +320,7 @@ export default function Dashboard() {
           <Card className="border-l-4 border-l-red-500">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-red-500" />
+                <Clock className="w-4 h-4 text-violet-500" />
                 Última Pesquisa
               </CardTitle>
             </CardHeader>
@@ -398,7 +398,7 @@ export default function Dashboard() {
           <Button 
             onClick={handleSearch} 
             disabled={isSearching || isLoading}
-            className="bg-red-600 hover:bg-red-700 text-white gap-2"
+            className="bg-violet-700 hover:bg-violet-800 text-white gap-2"
             size="lg"
           >
             {isSearching ? (
@@ -418,7 +418,7 @@ export default function Dashboard() {
             onClick={handleSendEmail} 
             disabled={isSendingEmail || isLoading || articles.length === 0}
             variant="outline"
-            className="gap-2 border-red-200 hover:bg-red-50 hover:text-red-700"
+            className="gap-2 border-violet-200 hover:bg-violet-50 hover:text-violet-700"
             size="lg"
           >
             {isSendingEmail ? (
@@ -441,7 +441,7 @@ export default function Dashboard() {
             <Card className="h-full">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-red-500" />
+                  <Activity className="w-5 h-5 text-violet-500" />
                   Artigos Encontrados ({articles.length})
                 </CardTitle>
                 <CardDescription>
@@ -479,13 +479,13 @@ export default function Dashboard() {
                               className="block hover:bg-slate-50 rounded-lg p-3 -mx-3 transition-colors"
                             >
                               <div className="flex items-start justify-between gap-2">
-                                <h3 className="font-semibold text-slate-900 group-hover:text-red-600 transition-colors line-clamp-2">
+                                <h3 className="font-semibold text-slate-900 group-hover:text-violet-600 transition-colors line-clamp-2">
                                   {article.title}
                                 </h3>
-                                <ExternalLink className="w-4 h-4 text-slate-400 flex-shrink-0 mt-1 group-hover:text-red-500" />
+                                <ExternalLink className="w-4 h-4 text-slate-400 flex-shrink-0 mt-1 group-hover:text-violet-500" />
                               </div>
                               <div className="flex items-center gap-2 mt-2">
-                                <Badge variant="secondary" className="text-xs bg-red-50 text-red-700 hover:bg-red-100">
+                                <Badge variant="secondary" className="text-xs bg-violet-50 text-violet-700 hover:bg-violet-100">
                                   {article.source}
                                 </Badge>
                                 {article.publicationDate && (
@@ -516,7 +516,7 @@ export default function Dashboard() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Database className="w-5 h-5 text-red-500" />
+                  <Database className="w-5 h-5 text-violet-500" />
                   Fontes Monitoradas
                 </CardTitle>
                 <CardDescription>
@@ -548,7 +548,7 @@ export default function Dashboard() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Mail className="w-5 h-5 text-red-500" />
+                  <Mail className="w-5 h-5 text-violet-500" />
                   Configuração de Email
                 </CardTitle>
                 <CardDescription>
@@ -604,7 +604,7 @@ export default function Dashboard() {
                       href={mailtoLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                      className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-violet-700 text-white rounded-lg hover:bg-violet-800 transition-colors text-sm font-medium"
                     >
                       <Mail className="w-4 h-4" />
                       Abrir no Meu Cliente de Email
@@ -622,7 +622,7 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2 text-slate-600">
-              <Heart className="w-5 h-5 text-red-500" />
+              <Heart className="w-5 h-5 text-violet-500" />
               <span className="text-sm">Monitor de Medicina Sem Sangue © {new Date().getFullYear()}</span>
             </div>
             <div className="text-sm text-slate-500">

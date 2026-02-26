@@ -226,13 +226,13 @@ function generateEmailHtml(articles: Article[]): string {
   <meta charset="UTF-8">
   <style>
     body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
-    .header { background: linear-gradient(135deg, #dc2626, #b91c1c); color: white; padding: 30px; border-radius: 12px; text-align: center; }
+    .header { background: linear-gradient(135deg, #5b3c88, #452d6a); color: white; padding: 30px; border-radius: 12px; text-align: center; }
     .stats { display: flex; gap: 15px; margin: 20px 0; }
     .stat { flex: 1; background: white; padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .stat-number { font-size: 32px; font-weight: bold; color: #dc2626; }
+    .stat-number { font-size: 32px; font-weight: bold; color: #5b3c88; }
     .article { background: white; padding: 20px; border-radius: 8px; margin: 15px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .article-title { font-size: 18px; font-weight: 600; color: #1e40af; text-decoration: none; }
-    .article-source { background: #fee2e2; color: #991b1b; padding: 4px 10px; border-radius: 4px; font-size: 12px; display: inline-block; margin: 10px 0; }
+    .article-source { background: #f3e8ff; color: #7c3aed; padding: 4px 10px; border-radius: 4px; font-size: 12px; display: inline-block; margin: 10px 0; }
     .article-snippet { color: #555; font-size: 14px; line-height: 1.6; }
     .footer { text-align: center; padding: 30px; color: #666; border-top: 1px solid #eee; margin-top: 30px; }
   </style>

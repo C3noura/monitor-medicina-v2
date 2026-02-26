@@ -122,17 +122,17 @@ function generateEmailContent(articles: Article[]): { html: string; text: string
   <title>Relatório - Medicina Sem Sangue</title>
   <style>
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f8fafc; }
-    .header { background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 30px; border-radius: 12px; text-align: center; margin-bottom: 30px; }
+    .header { background: linear-gradient(135deg, #5b3c88 0%, #452d6a 100%); color: white; padding: 30px; border-radius: 12px; text-align: center; margin-bottom: 30px; }
     .header h1 { margin: 0; font-size: 28px; font-weight: 700; }
     .header p { margin: 10px 0 0; opacity: 0.9; }
-    .date-range { background: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #dc2626; }
+    .date-range { background: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #5b3c88; }
     .stats { display: flex; gap: 15px; margin-bottom: 30px; }
     .stat-card { flex: 1; background: white; padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .stat-number { font-size: 36px; font-weight: 700; color: #dc2626; }
+    .stat-number { font-size: 36px; font-weight: 700; color: #5b3c88; }
     .stat-label { color: #666; font-size: 14px; }
     .article { background: white; padding: 20px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .article-title { font-size: 18px; font-weight: 600; color: #1e40af; text-decoration: none; display: block; margin-bottom: 8px; }
-    .article-source { display: inline-block; background: #fee2e2; color: #991b1b; padding: 4px 10px; border-radius: 4px; font-size: 12px; margin-bottom: 10px; }
+    .article-source { display: inline-block; background: #f3e8ff; color: #7c3aed; padding: 4px 10px; border-radius: 4px; font-size: 12px; margin-bottom: 10px; }
     .article-snippet { color: #555; font-size: 14px; }
     .footer { text-align: center; padding: 30px; color: #666; font-size: 14px; border-top: 1px solid #e5e7eb; margin-top: 30px; }
   </style>
