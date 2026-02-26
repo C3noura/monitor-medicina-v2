@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Input } from '@/components/ui/input'
 import { 
   Search, 
   Mail, 
@@ -21,7 +22,12 @@ import {
   Send,
   CheckCircle,
   AlertCircle,
-  Heart
+  Heart,
+  Plus,
+  X,
+  Users,
+  Bell,
+  Trash2
 } from 'lucide-react'
 
 interface Article {
@@ -106,8 +112,12 @@ const DATE_RANGE = '2021-2025'
 // Local storage keys
 const STORAGE_KEYS = {
   articles: 'bloodless_medicine_articles',
-  lastSearch: 'bloodless_medicine_last_search'
+  lastSearch: 'bloodless_medicine_last_search',
+  subscribers: 'bloodless_medicine_subscribers'
 }
+
+// Default admin email
+const ADMIN_EMAIL = 'rui.cenoura@gmail.com'
 
 export default function Dashboard() {
   const [status, setStatus] = useState<SystemStatus | null>(null)
@@ -118,6 +128,83 @@ export default function Dashboard() {
   const [emailPreview, setEmailPreview] = useState<string | null>(null)
   const [mailtoLink, setMailtoLink] = useState<string | null>(null)
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null)
+  
+  // Email subscription states
+  const [subscribers, setSubscribers] = useState<string[]>([ADMIN_EMAIL])
+  const [newEmail, setNewEmail] = useState('')
+  const [emailError, setEmailError] = useState<string | null>(null)
+
+  // Load subscribers from localStorage
+  const loadSubscribers = useCallback(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.subscribers)
+      if (stored) {
+        const parsed = JSON.parse(stored) as string[]
+        // Ensure admin email is always included
+        if (!parsed.includes(ADMIN_EMAIL)) {
+          parsed.unshift(ADMIN_EMAIL)
+        }
+        return parsed
+      }
+    } catch (error) {
+      console.error('Error loading subscribers:', error)
+    }
+    return [ADMIN_EMAIL]
+  }, [])
+
+  // Save subscribers to localStorage
+  const saveSubscribers = useCallback((emails: string[]) => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.subscribers, JSON.stringify(emails))
+    } catch (error) {
+      console.error('Error saving subscribers:', error)
+    }
+  }, [])
+
+  // Validate email
+  const isValidEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
+
+  // Add new subscriber
+  const handleAddSubscriber = () => {
+    setEmailError(null)
+    
+    if (!newEmail.trim()) {
+      setEmailError('Por favor insira um email')
+      return
+    }
+    
+    if (!isValidEmail(newEmail)) {
+      setEmailError('Por favor insira um email válido')
+      return
+    }
+    
+    if (subscribers.includes(newEmail.toLowerCase())) {
+      setEmailError('Este email já está subscrito')
+      return
+    }
+    
+    const updatedSubscribers = [...subscribers, newEmail.toLowerCase()]
+    setSubscribers(updatedSubscribers)
+    saveSubscribers(updatedSubscribers)
+    setNewEmail('')
+    setNotification({ type: 'success', message: `Email ${newEmail} adicionado com sucesso!` })
+  }
+
+  // Remove subscriber (except admin)
+  const handleRemoveSubscriber = (email: string) => {
+    if (email === ADMIN_EMAIL) {
+      setNotification({ type: 'error', message: 'Não é possível remover o email principal' })
+      return
+    }
+    
+    const updatedSubscribers = subscribers.filter(s => s !== email)
+    setSubscribers(updatedSubscribers)
+    saveSubscribers(updatedSubscribers)
+    setNotification({ type: 'success', message: `Email ${email} removido da lista` })
+  }
 
   // Load articles from localStorage
   const loadFromStorage = useCallback(() => {
@@ -170,11 +257,15 @@ export default function Dashboard() {
         setArticles(storedArticles)
       }
       
+      // Load subscribers
+      const storedSubscribers = loadSubscribers()
+      setSubscribers(storedSubscribers)
+      
       await fetchStatus()
       setIsLoading(false)
     }
     loadData()
-  }, [fetchStatus, loadFromStorage])
+  }, [fetchStatus, loadFromStorage, loadSubscribers])
 
   // Trigger manual search
   const handleSearch = async () => {
@@ -221,13 +312,16 @@ export default function Dashboard() {
     setNotification(null)
     setMailtoLink(null)
     try {
-      // Send articles in the request body
+      // Send articles and all subscribers in the request body
       const response = await fetch('/api/send-email', { 
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ articles })
+        body: JSON.stringify({ 
+          articles,
+          recipients: subscribers // Send to all subscribers
+        })
       })
       const data: EmailResult = await response.json()
       
@@ -610,26 +704,103 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
-            {/* Email Config Card */}
+            {/* Email Subscribers Card */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Mail className="w-5 h-5 text-violet-500" />
-                  Configuração de Email
+                  <Users className="w-5 h-5 text-violet-500" />
+                  Subscritores de Email
                 </CardTitle>
                 <CardDescription>
-                  Destinatário dos relatórios semanais
+                  Pessoas que recebem os relatórios semanais
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="bg-slate-50 rounded-lg p-4">
-                  <p className="text-sm text-slate-600 mb-1">Email configurado:</p>
-                  <p className="font-mono font-semibold text-slate-900">
-                    rui.cenoura@gmail.com
-                  </p>
+              <CardContent className="space-y-4">
+                {/* Add new email */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">
+                    Adicionar novo email:
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="email"
+                      placeholder="email@exemplo.com"
+                      value={newEmail}
+                      onChange={(e) => {
+                        setNewEmail(e.target.value)
+                        setEmailError(null)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleAddSubscriber()
+                        }
+                      }}
+                      className="flex-1"
+                    />
+                    <Button 
+                      onClick={handleAddSubscriber}
+                      size="icon"
+                      className="bg-violet-700 hover:bg-violet-800"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  {emailError && (
+                    <p className="text-xs text-red-600">{emailError}</p>
+                  )}
                 </div>
-                <div className="mt-4 text-sm text-slate-500">
-                  <p>Relatórios são enviados automaticamente toda semana.</p>
+
+                {/* List of subscribers */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm text-slate-600">
+                    <span className="font-medium">Lista de subscritores:</span>
+                    <Badge variant="secondary" className="bg-violet-100 text-violet-700">
+                      {subscribers.length} {subscribers.length === 1 ? 'pessoa' : 'pessoas'}
+                    </Badge>
+                  </div>
+                  <ScrollArea className="h-[150px] rounded-lg border bg-slate-50 p-2">
+                    <div className="space-y-1">
+                      {subscribers.map((email) => (
+                        <div 
+                          key={email}
+                          className={`flex items-center justify-between p-2 rounded-lg ${
+                            email === ADMIN_EMAIL 
+                              ? 'bg-violet-100 border border-violet-200' 
+                              : 'bg-white hover:bg-slate-100'
+                          } transition-colors`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Mail className="w-4 h-4 text-violet-500 flex-shrink-0" />
+                            <span className="text-sm truncate font-medium text-slate-900">
+                              {email}
+                            </span>
+                            {email === ADMIN_EMAIL && (
+                              <Badge variant="outline" className="text-xs border-violet-300 text-violet-600">
+                                Admin
+                              </Badge>
+                            )}
+                          </div>
+                          {email !== ADMIN_EMAIL && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                              onClick={() => handleRemoveSubscriber(email)}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+
+                <div className="text-xs text-slate-500 bg-slate-100 rounded-lg p-3">
+                  <div className="flex items-center gap-2">
+                    <Bell className="w-4 h-4" />
+                    <span>Relatórios são enviados automaticamente toda semana para todos os subscritores.</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
