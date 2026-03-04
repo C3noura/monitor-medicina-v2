@@ -1,21 +1,15 @@
 {
-  "lastSearchTimestamp": "2026-03-04T11:58:53.107Z",
-  "nextScheduledSearch": "2026-03-11T11:58:53.107Z",
-  "articlesFound": 26,
+  "lastSearchTimestamp": "2026-02-24T10:24:39.466Z",
+  "nextScheduledSearch": "2026-03-03T10:24:39.466Z",
+  "articlesFound": 16,
   "sourcesSearched": [
-    "Nara Medical University (Japão)",
-    "University of Maryland (EUA)",
-    "Tampa General Hospital",
-    "PubMed",
-    "HTCT Journal (Hematology, Transfusion and Cell Therapy)",
-    "NYSORA",
     "ashpublications.org",
     "pubmed.ncbi.nlm.nih.gov",
-    "aabb.org",
-    "researchgate.net",
-    "who.int",
-    "pmc.ncbi.nlm.nih.gov",
     "sciencedirect.com",
+    "researchgate.net",
+    "aabb.org",
+    "pmc.ncbi.nlm.nih.gov",
+    "frontiersin.org",
     "thelancet.com"
   ]
 }
