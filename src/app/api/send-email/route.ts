@@ -1,35 +1,60 @@
 import { NextResponse } from 'next/server';
-import { readArticlesData, readLastSearchData } from '@/lib/search-service';
 import { TransactionalEmailsApi, SendSmtpEmail } from '@getbrevo/brevo';
-import fs from 'fs';
-import path from 'path';
 
-const EMAIL_RECIPIENT = 'rui.cenoura@gmail.com';
-const DATA_DIR = '/home/z/my-project/data';
+// Default admin email
+const ADMIN_EMAIL = 'rui.cenoura@gmail.com';
 
-// Brevo API key - plano gratuito: 300 emails/dia
-// Obtenha sua API key em: https://app.brevo.com/settings/keys/api
+// Brevo API key
 const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
 
-export async function POST() {
+interface Article {
+  id: string;
+  title: string;
+  url: string;
+  source: string;
+  snippet: string;
+  publicationDate: string | null;
+  dateFound: string;
+  isPortuguese?: boolean;
+}
+
+export async function POST(request: Request) {
   try {
-    const articlesData = readArticlesData();
-    const lastSearchData = readLastSearchData();
+    // Get articles and recipient info from request body
+    const body = await request.json();
+    const articles: Article[] = body.articles || [];
+    const mode = body.mode || 'individual'; // 'individual' or 'bulk'
     
-    // Get articles from the last week
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const weeklyArticles = articlesData.articles.filter(a => 
-      new Date(a.dateFound) >= weekAgo
-    );
+    // For individual mode: single recipient
+    // For bulk mode (cronjob): multiple recipients from subscribers list
+    let recipients: string[];
+    
+    if (mode === 'individual' && body.recipient) {
+      // Individual send - only to the specified email
+      recipients = [body.recipient];
+    } else if (body.recipients && Array.isArray(body.recipients)) {
+      // Bulk send - to all subscribers (used by cronjob)
+      recipients = body.recipients;
+      // Ensure admin is always included in bulk mode
+      if (!recipients.includes(ADMIN_EMAIL)) {
+        recipients.unshift(ADMIN_EMAIL);
+      }
+    } else {
+      // Fallback to admin only
+      recipients = [ADMIN_EMAIL];
+    }
+    
+    if (articles.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Nenhum artigo encontrado para enviar'
+      });
+    }
     
     // Generate email content
-    const { html, text } = generateEmailContent(weeklyArticles, lastSearchData);
+    const { html, text } = generateEmailContent(articles, mode);
     
-    // Save HTML report to file
-    const reportPath = path.join(DATA_DIR, 'weekly-report.html');
-    fs.writeFileSync(reportPath, html);
-    
-    // If no API key configured, return setup instructions with fallback options
+    // If no API key configured, return setup instructions
     if (!BREVO_API_KEY) {
       return NextResponse.json({
         success: false,
@@ -40,14 +65,13 @@ Para envio automático de emails:
 1. Acesse https://app.brevo.com (cadastro gratuito)
 2. Vá em Settings > SMTP & API > API Keys
 3. Crie uma nova API key
-4. Adicione ao arquivo .env.local:
+4. Adicione às variáveis de ambiente na Vercel:
    BREVO_API_KEY=sua_api_key_aqui
 
 O plano gratuito permite 300 emails/dia.
         `.trim(),
         htmlPreview: html,
-        textPreview: text,
-        mailtoLink: generateMailtoLink(weeklyArticles, text)
+        mailtoLink: generateMailtoLink(articles, text, recipients)
       });
     }
 
@@ -55,105 +79,137 @@ O plano gratuito permite 300 emails/dia.
     const apiInstance = new TransactionalEmailsApi();
     apiInstance.setApiKey(0, BREVO_API_KEY);
 
-    // Create email
-    const sendSmtpEmail = new SendSmtpEmail();
-    sendSmtpEmail.subject = `Relatório Semanal - Monitor de Medicina Sem Sangue (${weeklyArticles.length} artigos)`;
-    sendSmtpEmail.htmlContent = html;
-    // Use the verified sender email from Brevo account
-    sendSmtpEmail.sender = { 
-      name: 'Monitor Medicina Sem Sangue', 
-      email: 'rui.cenoura@gmail.com'
-    };
-    sendSmtpEmail.to = [{ email: EMAIL_RECIPIENT, name: 'Rui Cenoura' }];
-    sendSmtpEmail.textContent = text;
-    sendSmtpEmail.replyTo = { email: 'rui.cenoura@gmail.com', name: 'Rui Cenoura' };
+    // Send email to each recipient
+    const results: { email: string; success: boolean; messageId?: string; error?: string }[] = [];
+    
+    for (const recipient of recipients) {
+      try {
+        // Create email
+        const sendSmtpEmail = new SendSmtpEmail();
+        sendSmtpEmail.subject = `Relatório - Monitor de Medicina Sem Sangue (${articles.length} artigos)`;
+        sendSmtpEmail.htmlContent = html;
+        sendSmtpEmail.sender = { 
+          name: 'Monitor Medicina Sem Sangue', 
+          email: ADMIN_EMAIL
+        };
+        sendSmtpEmail.to = [{ email: recipient }];
+        sendSmtpEmail.textContent = text;
+        sendSmtpEmail.replyTo = { email: ADMIN_EMAIL, name: 'Rui Cenoura' };
 
-    // Send email
-    const response = await apiInstance.sendTransacEmail(sendSmtpEmail);
-    
-    console.log('✅ Email enviado com sucesso via Brevo!', response);
-    
-    return NextResponse.json({
-      success: true,
-      data: {
-        recipient: EMAIL_RECIPIENT,
-        subject: 'Relatório Semanal - Monitor de Medicina Sem Sangue',
-        articlesCount: weeklyArticles.length,
-        messageId: response.messageId,
-        message: `✅ Email enviado com sucesso para ${EMAIL_RECIPIENT}! (${weeklyArticles.length} artigos)`
+        // Send email
+        const response = await apiInstance.sendTransacEmail(sendSmtpEmail);
+        
+        results.push({
+          email: recipient,
+          success: true,
+          messageId: response.messageId
+        });
+        
+        console.log(`✅ Email enviado para ${recipient}`);
+      } catch (error: any) {
+        results.push({
+          email: recipient,
+          success: false,
+          error: error.message
+        });
+        console.error(`❌ Erro ao enviar para ${recipient}:`, error.message);
       }
-    });
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+    
+    if (successCount > 0) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          recipients: recipients,
+          successCount,
+          failCount,
+          subject: 'Relatório - Monitor de Medicina Sem Sangue',
+          articlesCount: articles.length,
+          results,
+          message: `✅ Email enviado com sucesso para ${successCount} destinatário(s)! (${articles.length} artigos)`
+        },
+        htmlPreview: html
+      });
+    } else {
+      return NextResponse.json({
+        success: false,
+        error: 'Não foi possível enviar o email para nenhum destinatário',
+        results
+      });
+    }
   } catch (error: any) {
     console.error('Error sending email:', error);
     
-    // Generate mailto fallback
-    const articlesData = readArticlesData();
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const weeklyArticles = articlesData.articles.filter(a => 
-      new Date(a.dateFound) >= weekAgo
-    );
-    const { html, text } = generateEmailContent(weeklyArticles, null);
-    
     return NextResponse.json({
       success: false,
-      error: `Erro ao enviar: ${error.message}`,
-      htmlPreview: html,
-      mailtoLink: generateMailtoLink(weeklyArticles, text)
+      error: `Erro ao enviar: ${error.message}`
     });
   }
 }
 
-function generateMailtoLink(articles: any[], text: string): string {
-  const subject = encodeURIComponent(`Relatório Semanal - Monitor de Medicina Sem Sangue (${articles.length} artigos)`);
+function generateMailtoLink(articles: Article[], text: string, recipients: string[]): string {
+  const subject = encodeURIComponent(`Relatório - Monitor de Medicina Sem Sangue (${articles.length} artigos)`);
   const body = encodeURIComponent(text);
-  return `mailto:rui.cenoura@gmail.com?subject=${subject}&body=${body}`;
+  const to = recipients.join(',');
+  return `mailto:${to}?subject=${subject}&body=${body}`;
 }
 
-function generateEmailContent(articles: any[], lastSearchData: any): { html: string; text: string } {
+function generateEmailContent(articles: Article[], mode: string = 'individual'): { html: string; text: string } {
   const now = new Date();
-  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString('pt-BR', {
+    return date.toLocaleDateString('pt-PT', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric'
     });
   };
 
+  const sourcesCount = new Set(articles.map(a => a.source)).size;
+  const portugueseCount = articles.filter(a => a.isPortuguese).length;
+
+  // Different header text based on mode
+  const headerSubtitle = mode === 'individual' 
+    ? 'Relatório de Pesquisa Individual'
+    : 'Relatório de Pesquisa Semanal';
+
   const html = `
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-PT">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Relatório Semanal - Medicina Sem Sangue</title>
+  <title>Relatório - Medicina Sem Sangue</title>
   <style>
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f8fafc; }
-    .header { background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 30px; border-radius: 12px; text-align: center; margin-bottom: 30px; }
+    .header { background: linear-gradient(135deg, #5b3c88 0%, #452d6a 100%); color: white; padding: 30px; border-radius: 12px; text-align: center; margin-bottom: 30px; }
     .header h1 { margin: 0; font-size: 28px; font-weight: 700; }
     .header p { margin: 10px 0 0; opacity: 0.9; }
-    .date-range { background: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #dc2626; }
-    .stats { display: flex; gap: 15px; margin-bottom: 30px; }
-    .stat-card { flex: 1; background: white; padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .stat-number { font-size: 36px; font-weight: 700; color: #dc2626; }
+    .date-range { background: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #5b3c88; }
+    .stats { display: flex; gap: 15px; margin-bottom: 30px; flex-wrap: wrap; }
+    .stat-card { flex: 1; min-width: 120px; background: white; padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .stat-number { font-size: 36px; font-weight: 700; color: #5b3c88; }
     .stat-label { color: #666; font-size: 14px; }
     .article { background: white; padding: 20px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .article-title { font-size: 18px; font-weight: 600; color: #1e40af; text-decoration: none; display: block; margin-bottom: 8px; }
-    .article-source { display: inline-block; background: #fee2e2; color: #991b1b; padding: 4px 10px; border-radius: 4px; font-size: 12px; margin-bottom: 10px; }
+    .article-source { display: inline-block; background: #f3e8ff; color: #7c3aed; padding: 4px 10px; border-radius: 4px; font-size: 12px; margin-bottom: 10px; }
+    .article-pt { display: inline-block; background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 4px; font-size: 12px; margin-left: 5px; }
     .article-snippet { color: #555; font-size: 14px; }
     .footer { text-align: center; padding: 30px; color: #666; font-size: 14px; border-top: 1px solid #e5e7eb; margin-top: 30px; }
-    .no-articles { text-align: center; padding: 40px; background: white; border-radius: 8px; color: #666; }
+    .subscribe-info { background: #f0fdf4; border: 1px solid #86efac; padding: 15px; border-radius: 8px; margin-top: 20px; }
   </style>
 </head>
 <body>
   <div class="header">
     <h1>🏥 Monitor de Medicina Sem Sangue</h1>
-    <p>Relatório Semanal de Pesquisa</p>
+    <p>${headerSubtitle}</p>
   </div>
   
   <div class="date-range">
-    <strong>📅 Período:</strong> ${formatDate(weekAgo)} a ${formatDate(now)}
+    <strong>📅 Gerado em:</strong> ${formatDate(now)} | <strong>Filtro:</strong> 2021-2025
   </div>
   
   <div class="stats">
@@ -162,30 +218,36 @@ function generateEmailContent(articles: any[], lastSearchData: any): { html: str
       <div class="stat-label">Artigos Encontrados</div>
     </div>
     <div class="stat-card">
-      <div class="stat-number">${new Set(articles.map(a => a.source)).size}</div>
+      <div class="stat-number">${portugueseCount}</div>
+      <div class="stat-label">Em Português 🇵🇹</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">${sourcesCount}</div>
       <div class="stat-label">Fontes Pesquisadas</div>
     </div>
   </div>
   
-  <h2 style="color: #333; margin-bottom: 20px;">📄 Artigos da Semana</h2>
+  <h2 style="color: #333; margin-bottom: 20px;">📄 Artigos Encontrados</h2>
   
-  ${articles.length === 0 ? `
-    <div class="no-articles">
-      <p>Nenhum artigo encontrado nesta semana.</p>
-      <p>Execute uma nova pesquisa para encontrar artigos.</p>
-    </div>
-  ` : articles.map(article => `
+  ${articles.map(article => `
     <div class="article">
       <a href="${article.url}" class="article-title" target="_blank">${article.title}</a>
       <span class="article-source">${article.source}</span>
+      ${article.isPortuguese ? '<span class="article-pt">🇵🇹 PT</span>' : ''}
       <p class="article-snippet">${article.snippet || 'Sem descrição disponível.'}</p>
       ${article.publicationDate ? `<p style="font-size: 12px; color: #888; margin-top: 8px;">Publicado: ${article.publicationDate}</p>` : ''}
     </div>
   `).join('')}
   
+  <div class="subscribe-info">
+    <strong>📩 Subscrever relatórios automáticos:</strong> Visite <a href="https://monitor-medicina-v2.vercel.app" style="color: #5b3c88;">monitor-medicina-v2.vercel.app</a> para adicionar o seu email à lista de subscritores e receber relatórios semanais automaticamente.
+  </div>
+  
   <div class="footer">
     <p>Este relatório foi gerado automaticamente pelo Monitor de Medicina Sem Sangue.</p>
-    <p>Para mais informações, acesse o painel de controle.</p>
+    <p style="font-size: 12px; color: #888;">
+      Para cancelar a subscrição de relatórios automáticos, responda a este email com "CANCELAR".
+    </p>
   </div>
 </body>
 </html>
@@ -193,22 +255,22 @@ function generateEmailContent(articles: any[], lastSearchData: any): { html: str
 
   const text = `
 MONITOR DE MEDICINA SEM SANGUE
-Relatório Semanal de Pesquisa
+${headerSubtitle}
 =====================================
 
-Período: ${formatDate(weekAgo)} a ${formatDate(now)}
+Gerado em: ${formatDate(now)}
+Filtro de data: 2021-2025
 
 Estatísticas:
 - Artigos encontrados: ${articles.length}
-- Fontes pesquisadas: ${new Set(articles.map(a => a.source)).size}
+- Em português: ${portugueseCount}
+- Fontes pesquisadas: ${sourcesCount}
 
-ARTIGOS DA SEMANA:
+ARTIGOS:
 ------------------
 
-${articles.length === 0 
-  ? 'Nenhum artigo encontrado nesta semana.' 
-  : articles.map((a, i) => `
-${i + 1}. ${a.title}
+${articles.map((a, i) => `
+${i + 1}. ${a.title}${a.isPortuguese ? ' 🇵🇹 PT' : ''}
    Fonte: ${a.source}
    Link: ${a.url}
    ${a.snippet ? `Resumo: ${a.snippet}` : ''}
@@ -216,7 +278,11 @@ ${i + 1}. ${a.title}
 `).join('\n')}
 
 -----------------------------------
+
+Para subscrever relatórios automáticos: monitor-medicina-v2.vercel.app
+
 Este relatório foi gerado automaticamente.
+Para cancelar a subscrição, responda a este email com "CANCELAR".
 `.trim();
 
   return { html, text };
