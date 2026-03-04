@@ -102,6 +102,7 @@ class MedicalResearchAgent {
   private readonly PUBMED_SEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi";
   private readonly PUBMED_SUMMARY_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi";
   private readonly PUBMED_FETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi";
+  private readonly CLINICAL_TRIALS_URL = "https://clinicaltrials.gov/api/v2/studies";
 
   private generateId(): string {
     return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -127,6 +128,116 @@ class MedicalResearchAgent {
     if (!year) return true;
     const y = parseInt(year);
     return y >= MIN_YEAR && y <= CURRENT_YEAR;
+  }
+
+  /**
+   * Busca no ClinicalTrials.gov (Ensaios Clínicos)
+   * - Estudos com pacientes em todo o mundo
+   * - Prioridade para estudos em Portugal
+   * - Filtros por estado: recrutando, ativo, concluído
+   */
+  async fetchClinicalTrials(query: string): Promise<ResearchPaper[]> {
+    try {
+      // Primeiro, buscar estudos em Portugal
+      const paramsPortugal = new URLSearchParams({
+        'query.term': query,
+        'filter.overallStatus': 'RECRUITING,NOT_YET_RECRUITING,ACTIVE_NOT_RECRUITING,COMPLETED',
+        'query.locn': 'Portugal',
+        'format': 'json',
+        'pageSize': '3'
+      });
+
+      const responsePortugal = await fetch(`${this.CLINICAL_TRIALS_URL}?${paramsPortugal}`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      
+      const portugalStudies: ResearchPaper[] = [];
+      if (responsePortugal.ok) {
+        const data = await responsePortugal.json();
+        if (data.studies) {
+          for (const study of data.studies) {
+            const protocol = study.protocolSection;
+            const id = protocol?.identificationModule?.nctId;
+            const title = protocol?.identificationModule?.briefTitle || 'Untitled';
+            const summary = protocol?.descriptionModule?.briefSummary || '';
+            const status = protocol?.statusModule?.overallStatus || '';
+            const locations = protocol?.contactsLocationsModule?.locations || [];
+            const startDate = protocol?.statusModule?.startDateStruct?.date || '';
+            const year = startDate ? startDate.split('-')[0] : '';
+            
+            // Find Portugal location
+            const portugalLocation = locations.find((l: any) => 
+              l.country?.toLowerCase().includes('portugal')
+            );
+            const city = portugalLocation?.city || '';
+            
+            portugalStudies.push({
+              id: this.generateId(),
+              source: 'ClinicalTrials.gov 🇵🇹',
+              title: `[ENSaIO CLÍNICO] ${title}`,
+              authors: city ? `Local: ${city}, Portugal` : 'Portugal',
+              year: year,
+              abstract: summary.substring(0, 500) || 'Ensino clínico em andamento.',
+              url: `https://clinicaltrials.gov/study/${id}`,
+              isPortuguese: true,
+              hasFullText: false
+            });
+          }
+        }
+      }
+
+      // Depois, buscar estudos internacionais (sem filtro de localização)
+      const paramsIntl = new URLSearchParams({
+        'query.term': query,
+        'filter.overallStatus': 'RECRUITING,ACTIVE_NOT_RECRUITING',
+        'format': 'json',
+        'pageSize': '3'
+      });
+
+      const responseIntl = await fetch(`${this.CLINICAL_TRIALS_URL}?${paramsIntl}`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      
+      const intlStudies: ResearchPaper[] = [];
+      if (responseIntl.ok) {
+        const data = await responseIntl.json();
+        if (data.studies) {
+          for (const study of data.studies) {
+            const protocol = study.protocolSection;
+            const id = protocol?.identificationModule?.nctId;
+            const title = protocol?.identificationModule?.briefTitle || 'Untitled';
+            const summary = protocol?.descriptionModule?.briefSummary || '';
+            const status = protocol?.statusModule?.overallStatus || '';
+            const locations = protocol?.contactsLocationsModule?.locations || [];
+            const startDate = protocol?.statusModule?.startDateStruct?.date || '';
+            const year = startDate ? startDate.split('-')[0] : '';
+            
+            // Get first location
+            const firstLocation = locations[0];
+            const country = firstLocation?.country || 'International';
+            const city = firstLocation?.city || '';
+            
+            intlStudies.push({
+              id: this.generateId(),
+              source: 'ClinicalTrials.gov',
+              title: `[ENSaIO CLÍNICO] ${title}`,
+              authors: city ? `${city}, ${country}` : country,
+              year: year,
+              abstract: summary.substring(0, 500) || 'Ensino clínico em andamento.',
+              url: `https://clinicaltrials.gov/study/${id}`,
+              isPortuguese: this.detectPortuguese(title, summary),
+              hasFullText: false
+            });
+          }
+        }
+      }
+
+      // Combinar, priorizando Portugal
+      return [...portugalStudies, ...intlStudies];
+    } catch (error) {
+      console.error('ClinicalTrials.gov error:', error);
+      return [];
+    }
   }
 
   /**
@@ -309,20 +420,21 @@ class MedicalResearchAgent {
 
   /**
    * Orquestrador: Busca em todas as fontes e consolida
-   * Fontes ativas: Europe PMC, Semantic Scholar, PubMed
+   * Fontes ativas: Europe PMC, Semantic Scholar, PubMed, ClinicalTrials.gov
    * Fontes removidas (não funcionam): DOAJ, BASE, SciELO
    */
   async searchAll(query: string): Promise<ResearchPaper[]> {
     console.log(`🔍 Pesquisando por: "${query}"...`);
     
     // Busca paralela em todas as fontes ativas
-    const [epmc, semantic, pubmed] = await Promise.all([
+    const [epmc, semantic, pubmed, clinicalTrials] = await Promise.all([
       this.fetchEuropePMC(query),
       this.fetchSemanticScholar(query),
-      this.fetchPubMed(query)
+      this.fetchPubMed(query),
+      this.fetchClinicalTrials(query)
     ]);
 
-    const allResults = [...epmc, ...semantic, ...pubmed];
+    const allResults = [...epmc, ...semantic, ...pubmed, ...clinicalTrials];
 
     // Remover duplicados por URL e filtrar por relevância
     const seenUrls = new Set<string>();
@@ -411,7 +523,8 @@ export async function POST(request: Request) {
         sources: {
           'PubMed': 'Padrão ouro - 35+ milhões de citações médicas',
           'Europe PMC': 'Open Access - Texto completo disponível',
-          'Semantic Scholar': 'IA para relevância e citações'
+          'Semantic Scholar': 'IA para relevância e citações',
+          'ClinicalTrials.gov': 'Ensaios clínicos - Prioridade Portugal'
         },
         dateRange: `${MIN_YEAR}-${CURRENT_YEAR}`,
         searchTerms: SEARCH_QUERIES.slice(0, 3)

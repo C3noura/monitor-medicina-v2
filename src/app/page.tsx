@@ -101,6 +101,7 @@ const SEARCH_SOURCES = [
   { name: 'PubMed/PMC', url: 'pmc.ncbi.nlm.nih.gov', icon: '🔬', type: 'international' as const },
   { name: 'Europe PMC', url: 'europepmc.org', icon: '🇪🇺', type: 'international' as const },
   { name: 'Semantic Scholar', url: 'semanticscholar.org', icon: '🎓', type: 'international' as const },
+  { name: 'ClinicalTrials.gov', url: 'clinicaltrials.gov', icon: '🏥', type: 'clinical' as const },
   { name: 'WHO', url: 'who.int', icon: '🌍', type: 'international' as const },
 ]
 
@@ -817,14 +818,20 @@ export default function Dashboard() {
                         <p className="font-medium text-slate-900 text-sm">{source.name}</p>
                         <p className="text-xs text-slate-500 truncate">{source.url}</p>
                       </div>
-                      <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
-                        Ativo
-                      </Badge>
+                      {source.type === 'clinical' ? (
+                        <Badge variant="default" className="text-xs bg-blue-600 text-white">
+                          🏥 Ensaios Clínicos
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                          Ativo
+                        </Badge>
+                      )}
                     </div>
                   ))}
                 </div>
                 <div className="mt-3 pt-3 border-t text-xs text-slate-500">
-                  <p>💡 Todas as fontes pesquisam artigos em inglês e podem incluir resultados em português.</p>
+                  <p>💡 ClinicalTrials.gov prioriza estudos em Portugal. Outras fontes pesquisam globalmente.</p>
                 </div>
               </CardContent>
             </Card>
