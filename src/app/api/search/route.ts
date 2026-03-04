@@ -308,61 +308,21 @@ class MedicalResearchAgent {
   }
 
   /**
-   * Busca no DOAJ (Open Access Journals)
-   * - Inclui revistas portuguesas
-   */
-  async fetchDOAJ(query: string): Promise<ResearchPaper[]> {
-    try {
-      const params = new URLSearchParams({
-        query: query,
-        page: '1',
-        pageSize: '5'
-      });
-
-      const response = await fetch(`https://api.doaj.org/search/articles?${params}`);
-      if (!response.ok) return [];
-
-      const data = await response.json();
-      const results = data?.results || [];
-
-      return results.map((item: any) => {
-        const bibjson = item?.bibjson || {};
-        const isPortuguese = bibjson?.journal?.publisher?.country === 'PT' ||
-                            this.detectPortuguese(bibjson?.title, bibjson?.abstract);
-
-        return {
-          id: this.generateId(),
-          source: 'DOAJ',
-          title: bibjson?.title || 'Untitled',
-          authors: bibjson?.author?.map((a: any) => a.name).join(', ') || 'Unknown authors',
-          year: bibjson?.year || '',
-          abstract: bibjson?.abstract?.substring(0, 500) || "Resumo não disponível.",
-          url: bibjson?.link?.[0]?.url || `https://doaj.org/article/${item.id}`,
-          isPortuguese: isPortuguese,
-          hasFullText: true
-        };
-      });
-    } catch (error) {
-      console.error('DOAJ error:', error);
-      return [];
-    }
-  }
-
-  /**
    * Orquestrador: Busca em todas as fontes e consolida
+   * Fontes ativas: Europe PMC, Semantic Scholar, PubMed
+   * Fontes removidas (não funcionam): DOAJ, BASE, SciELO
    */
   async searchAll(query: string): Promise<ResearchPaper[]> {
     console.log(`🔍 Pesquisando por: "${query}"...`);
     
-    // Busca paralela em todas as fontes
-    const [epmc, semantic, pubmed, doaj] = await Promise.all([
+    // Busca paralela em todas as fontes ativas
+    const [epmc, semantic, pubmed] = await Promise.all([
       this.fetchEuropePMC(query),
       this.fetchSemanticScholar(query),
-      this.fetchPubMed(query),
-      this.fetchDOAJ(query)
+      this.fetchPubMed(query)
     ]);
 
-    const allResults = [...epmc, ...semantic, ...pubmed, ...doaj];
+    const allResults = [...epmc, ...semantic, ...pubmed];
 
     // Remover duplicados por URL e filtrar por relevância
     const seenUrls = new Set<string>();
@@ -451,8 +411,7 @@ export async function POST(request: Request) {
         sources: {
           'PubMed': 'Padrão ouro - 35+ milhões de citações médicas',
           'Europe PMC': 'Open Access - Texto completo disponível',
-          'Semantic Scholar': 'IA para relevância e citações',
-          'DOAJ': 'Revistas em acesso aberto'
+          'Semantic Scholar': 'IA para relevância e citações'
         },
         dateRange: `${MIN_YEAR}-${CURRENT_YEAR}`,
         searchTerms: SEARCH_QUERIES.slice(0, 3)

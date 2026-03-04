@@ -96,16 +96,12 @@ interface EmailResult {
   mailtoLink?: string
 }
 
-// APIs and databases being searched
+// APIs and databases being searched (only working APIs)
 const SEARCH_SOURCES = [
   { name: 'PubMed/PMC', url: 'pmc.ncbi.nlm.nih.gov', icon: '🔬', type: 'international' as const },
   { name: 'Europe PMC', url: 'europepmc.org', icon: '🇪🇺', type: 'international' as const },
+  { name: 'Semantic Scholar', url: 'semanticscholar.org', icon: '🎓', type: 'international' as const },
   { name: 'WHO', url: 'who.int', icon: '🌍', type: 'international' as const },
-  { name: 'Science Direct', url: 'sciencedirect.com', icon: '📑', type: 'international' as const },
-  { name: 'DOAJ', url: 'doaj.org', icon: '📖', type: 'multilingual' as const },
-  { name: 'SciELO', url: 'scielo.org', icon: '🇵🇹', type: 'multilingual' as const },
-  { name: 'OpenAlex', url: 'openalex.org', icon: '🎓', type: 'international' as const },
-  { name: 'BASE', url: 'base-search.net', icon: '🔍', type: 'multilingual' as const },
 ]
 
 // Date range for articles (last 4 years)
@@ -821,20 +817,14 @@ export default function Dashboard() {
                         <p className="font-medium text-slate-900 text-sm">{source.name}</p>
                         <p className="text-xs text-slate-500 truncate">{source.url}</p>
                       </div>
-                      {source.type === 'multilingual' ? (
-                        <Badge variant="default" className="text-xs bg-green-600 text-white">
-                          🇵🇹 Multilíngue
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs">
-                          Ativo
-                        </Badge>
-                      )}
+                      <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                        Ativo
+                      </Badge>
                     </div>
                   ))}
                 </div>
                 <div className="mt-3 pt-3 border-t text-xs text-slate-500">
-                  <p>💡 As fontes multilíngues podem retornar artigos em português.</p>
+                  <p>💡 Todas as fontes pesquisam artigos em inglês e podem incluir resultados em português.</p>
                 </div>
               </CardContent>
             </Card>

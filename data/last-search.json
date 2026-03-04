@@ -1,15 +1,14 @@
 {
-  "lastSearchTimestamp": "2026-02-24T10:24:39.466Z",
-  "nextScheduledSearch": "2026-03-03T10:24:39.466Z",
-  "articlesFound": 16,
+  "lastSearchTimestamp": "2026-03-04T13:52:10.217Z",
+  "nextScheduledSearch": "2026-03-11T13:52:10.217Z",
+  "articlesFound": 22,
   "sourcesSearched": [
     "ashpublications.org",
-    "pubmed.ncbi.nlm.nih.gov",
-    "sciencedirect.com",
     "researchgate.net",
+    "pubmed.ncbi.nlm.nih.gov",
     "aabb.org",
     "pmc.ncbi.nlm.nih.gov",
-    "frontiersin.org",
-    "thelancet.com"
+    "who.int",
+    "sciencedirect.com"
   ]
 }
