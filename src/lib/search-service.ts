@@ -1,6 +1,7 @@
 import ZAI from 'z-ai-web-dev-sdk';
 import fs from 'fs';
 import path from 'path';
+import { publicationsData } from './publications-data';
 
 const DATA_DIR = '/home/z/my-project/data';
 const LAST_SEARCH_FILE = path.join(DATA_DIR, 'last-search.json');
@@ -57,6 +58,8 @@ export interface Article {
   snippet: string;
   publicationDate: string | null;
   dateFound: string;
+  isExternal?: boolean;
+  category?: string;
 }
 
 export interface LastSearchData {
@@ -147,6 +150,21 @@ export function writeArticlesData(data: ArticlesData): void {
   fs.writeFileSync(ARTICLES_FILE, JSON.stringify(data, null, 2));
 }
 
+// Get external publications as articles
+function getExternalPublications(): Article[] {
+  return publicationsData.map(pub => ({
+    id: pub.id,
+    title: pub.title,
+    url: pub.url,
+    source: pub.source,
+    snippet: pub.description,
+    publicationDate: null,
+    dateFound: new Date().toISOString(),
+    isExternal: true,
+    category: pub.category
+  }));
+}
+
 // Perform web search using z-ai-web-dev-sdk
 export async function performSearch(): Promise<Article[]> {
   const zai = await ZAI.create();
@@ -187,7 +205,17 @@ export async function performSearch(): Promise<Article[]> {
     }
   }
 
-  return allArticles;
+  // Add external publications to results
+  const externalPubs = getExternalPublications();
+  
+  // Merge and deduplicate (external pubs have priority)
+  const existingUrls = new Set(allArticles.map(a => a.url));
+  const uniqueExternalPubs = externalPubs.filter(pub => !existingUrls.has(pub.url));
+  
+  // Add external publications at the beginning (priority)
+  const mergedArticles = [...uniqueExternalPubs, ...allArticles];
+
+  return mergedArticles;
 }
 
 // Save search results

@@ -32,6 +32,8 @@ interface Article {
   snippet: string
   publicationDate: string | null
   dateFound: string
+  isExternal?: boolean
+  category?: string
 }
 
 interface SystemStatus {
@@ -402,6 +404,11 @@ export default function Dashboard() {
                                 <ExternalLink className="w-4 h-4 text-slate-400 flex-shrink-0 mt-1 group-hover:text-red-500" />
                               </div>
                               <div className="flex items-center gap-2 mt-2">
+                                {article.isExternal && article.category ? (
+                                  <Badge variant="default" className="text-xs bg-amber-500 text-white hover:bg-amber-600">
+                                    ⭐ {article.category}
+                                  </Badge>
+                                ) : null}
                                 <Badge variant="secondary" className="text-xs bg-red-50 text-red-700 hover:bg-red-100">
                                   {article.source}
                                 </Badge>
