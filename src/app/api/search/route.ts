@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { publicationsData } from '@/lib/publications-data';
 
 // Interface unificada para artigos de pesquisa
 interface ResearchPaper {
@@ -13,6 +14,7 @@ interface ResearchPaper {
   hasFullText?: boolean;
   citationCount?: number;
   isPreprint?: boolean;
+  isExternal?: boolean;
   dateFound?: string;
   expiresAt?: string;
   relevanceScore?: number;
@@ -475,6 +477,23 @@ export async function POST(request: Request) {
   try {
     const agent = new MedicalResearchAgent();
     const allPapers: ResearchPaper[] = [];
+
+    // Adicionar publicações externas curadas (jurisprudência, bioética, etc.)
+    const curatedPublications: ResearchPaper[] = publicationsData.map(pub => ({
+      id: pub.id,
+      source: pub.source,
+      title: `[${pub.category}] ${pub.title}`,
+      authors: pub.dateAdded || 'Publicação Externa',
+      year: pub.dateAdded ? pub.dateAdded.split('-')[0] : new Date().getFullYear().toString(),
+      abstract: pub.description,
+      url: pub.url,
+      isPortuguese: true,
+      hasFullText: true,
+      isExternal: true
+    }));
+
+    // Adicionar publicações curadas ao início dos resultados
+    allPapers.push(...curatedPublications);
 
     // Buscar com termos em inglês (usar TODAS as queries)
     for (const query of SEARCH_QUERIES) {

@@ -6,11 +6,36 @@ export interface Publication {
   source: string;
   description: string;
   url: string;
+  dateAdded?: string;
 }
 
 // Publicações externas curadas manualmente
 export const publicationsData: Publication[] = [
-  // Categoria: Biotecnologia e Sangue Artificial
+  // ==========================================
+  // JURISPRUDÊNCIA E BIOÉTICA - MARÇO 2026
+  // ==========================================
+  {
+    id: "2026-03-20-001",
+    category: "Jurisprudência Europeia (TEDH)",
+    title: "Sentença Histórica: Pindo Mulla v. Espanha",
+    source: "European Court of Human Rights (Grand Chamber)",
+    description: "Decisão unânime que reafirma o direito absoluto de um adulto competente recusar transfusões de sangue, condenando falhas no sistema de saúde em respeitar diretivas antecipadas.",
+    url: "https://hudoc.echr.coe.int/eng?i=001-236065",
+    dateAdded: "2026-03-20"
+  },
+  {
+    id: "2026-03-20-002",
+    category: "Bioética e Políticas de Saúde",
+    title: "Autonomia do Paciente e PBM: Lições do Caso Pindo Mulla",
+    source: "Blood Transfusion Journal",
+    description: "Análise que demonstra como o respeito pela recusa informada depende da prontidão do sistema de saúde (PBM) e não de decisões judiciais ad hoc.",
+    url: "https://www.bloodtransfusion.it/bt/article/view/1292",
+    dateAdded: "2026-03-20"
+  },
+
+  // ==========================================
+  // BIOTECNOLOGIA E SANGUE ARTIFICIAL
+  // ==========================================
   {
     id: "art-001",
     category: "Biotecnologia e Sangue Artificial",
@@ -28,7 +53,9 @@ export const publicationsData: Publication[] = [
     url: "https://www.medschool.umaryland.edu/news/2023/artificial-blood-product-one-step-closer-to-reality-with-46-million-in-federal-funding.html"
   },
 
-  // Categoria: Cirurgias de Alta Complexidade e PBM
+  // ==========================================
+  // CIRURGIAS DE ALTA COMPLEXIDADE E PBM
+  // ==========================================
   {
     id: "cir-001",
     category: "Cirurgias de Alta Complexidade e PBM",
@@ -46,7 +73,9 @@ export const publicationsData: Publication[] = [
     url: "https://pubmed.ncbi.nlm.nih.gov/40935286/"
   },
 
-  // Categoria: Diretrizes, Consensos e Gestão Clínica
+  // ==========================================
+  // DIRETRIZES, CONSENSOS E GESTÃO CLÍNICA
+  // ==========================================
   {
     id: "dir-001",
     category: "Diretrizes e Consensos Clínicos",
